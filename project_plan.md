@@ -8,12 +8,12 @@ It should initially have a 3D viewport and a DAG node view, with options for fut
 ### App/UI
 
 * **Rust**
-* **egui + eframe** (fastest path to native + later wasm)
+* **egui + eframe** (native now, wasm later)
 * Layout: simple split view between Viewport and Node Graph, configurable by percentage in settings (drag resize later)
 
 ### Node editor
 
-* **egui-snarl** for the node canvas and interaction model
+* **egui-snarl** for the node canvas and interaction model (0.9+)
 
 ### Rendering
 
@@ -208,7 +208,7 @@ Deliverables:
 
 * Render a test mesh with **simple lit shading**
 * Grid + axes
-* Debug panel toggles grid/axes, shading mode (lit/unlit/normal/depth)
+* Debug panel toggles grid/axes, shading mode (lit/normals/depth)
 * On-screen stats overlay
 
 ### Milestone 3 " Node editor (egui-snarl) integrated with core graph model
@@ -232,6 +232,8 @@ Deliverables:
   * `Box` / `Grid` (source)
   * `Transform`
   * `Merge`
+  * `Copy to Points`
+  * `Sphere`
   * `Subdivide` (simple)
   * `NormalCompute` (if needed)
   * `Output`
@@ -251,6 +253,7 @@ Deliverables:
 * Undo/redo for graph edits + param changes
 * Copy/paste nodes (optional but big UX win)
 * Better error UX (node tinted, error message in node footer)
+* Keyboard add-node menu (Tab) and more forgiving pin hit targets
 
 ### Milestone 7 " Web build (secondary)
 
@@ -286,3 +289,12 @@ Deliverables:
   * builtin node implementations separate from core types
 
 ---
+
+## Status notes (as built)
+
+* App shell, panels, split settings, project save/load, default graph load: in place.
+* WGPU viewport, depth buffer, grid/axes/normals/bounds overlays, stats, lit/normals/depth shading: in place.
+* Camera controls: orbit/pan/dolly wired to render.
+* Node graph integration, inspector, error badges/tooltips, output invalidation: in place.
+* Headless CLI mode for plan -> project JSON exists.
+* Built-in nodes implemented: Box, Grid, Sphere, Transform, Merge, Copy to Points, Output.

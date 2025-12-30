@@ -13,6 +13,8 @@ pub enum BuiltinNodeKind {
     Transform,
     Merge,
     CopyToPoints,
+    Scatter,
+    Normal,
     Output,
 }
 
@@ -25,6 +27,8 @@ impl BuiltinNodeKind {
             BuiltinNodeKind::Transform => "Transform",
             BuiltinNodeKind::Merge => "Merge",
             BuiltinNodeKind::CopyToPoints => "Copy to Points",
+            BuiltinNodeKind::Scatter => "Scatter",
+            BuiltinNodeKind::Normal => "Normal",
             BuiltinNodeKind::Output => "Output",
         }
     }
@@ -38,6 +42,8 @@ pub fn builtin_kind_from_name(name: &str) -> Option<BuiltinNodeKind> {
         "Transform" => Some(BuiltinNodeKind::Transform),
         "Merge" => Some(BuiltinNodeKind::Merge),
         "Copy to Points" => Some(BuiltinNodeKind::CopyToPoints),
+        "Scatter" => Some(BuiltinNodeKind::Scatter),
+        "Normal" => Some(BuiltinNodeKind::Normal),
         "Output" => Some(BuiltinNodeKind::Output),
         _ => None,
     }
@@ -51,6 +57,8 @@ pub fn builtin_definitions() -> Vec<NodeDefinition> {
         node_definition(BuiltinNodeKind::Transform),
         node_definition(BuiltinNodeKind::Merge),
         node_definition(BuiltinNodeKind::CopyToPoints),
+        node_definition(BuiltinNodeKind::Scatter),
+        node_definition(BuiltinNodeKind::Normal),
         node_definition(BuiltinNodeKind::Output),
     ]
 }
@@ -120,6 +128,18 @@ pub fn node_definition(kind: BuiltinNodeKind) -> NodeDefinition {
             ],
             outputs: vec![mesh_out()],
         },
+        BuiltinNodeKind::Scatter => NodeDefinition {
+            name: kind.name().to_string(),
+            category: "Operators".to_string(),
+            inputs: vec![mesh_in()],
+            outputs: vec![mesh_out()],
+        },
+        BuiltinNodeKind::Normal => NodeDefinition {
+            name: kind.name().to_string(),
+            category: "Operators".to_string(),
+            inputs: vec![mesh_in()],
+            outputs: vec![mesh_out()],
+        },
         BuiltinNodeKind::Output => NodeDefinition {
             name: kind.name().to_string(),
             category: "Outputs".to_string(),
@@ -160,6 +180,13 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
             values.insert("translate".to_string(), ParamValue::Vec3([0.0, 0.0, 0.0]));
             values.insert("rotate_deg".to_string(), ParamValue::Vec3([0.0, 0.0, 0.0]));
             values.insert("scale".to_string(), ParamValue::Vec3([1.0, 1.0, 1.0]));
+        }
+        BuiltinNodeKind::Scatter => {
+            values.insert("count".to_string(), ParamValue::Int(200));
+            values.insert("seed".to_string(), ParamValue::Int(1));
+        }
+        BuiltinNodeKind::Normal => {
+            values.insert("threshold_deg".to_string(), ParamValue::Float(60.0));
         }
         BuiltinNodeKind::Output => {}
     }
@@ -296,6 +323,26 @@ pub fn compute_mesh_node(
             }
             Ok(Mesh::merge(&copies))
         }
+        BuiltinNodeKind::Scatter => {
+            let input = inputs
+                .get(0)
+                .cloned()
+                .ok_or_else(|| "Scatter requires a mesh input".to_string())?;
+            let count = param_int(params, "count", 200).max(0) as usize;
+            let seed = param_int(params, "seed", 1) as u32;
+            scatter_points(&input, count, seed)
+        }
+        BuiltinNodeKind::Normal => {
+            let mut input = inputs
+                .get(0)
+                .cloned()
+                .ok_or_else(|| "Normal requires a mesh input".to_string())?;
+            let threshold = param_float(params, "threshold_deg", 60.0).clamp(0.0, 180.0);
+            if !input.compute_normals_with_threshold(threshold) {
+                return Err("Normal node requires triangle mesh input".to_string());
+            }
+            Ok(input)
+        }
         BuiltinNodeKind::Output => {
             let input = inputs
                 .get(0)
@@ -362,6 +409,124 @@ fn param_vec3(params: &NodeParams, key: &str, default: [f32; 3]) -> [f32; 3] {
         .unwrap_or(default)
 }
 
+fn scatter_points(input: &Mesh, count: usize, seed: u32) -> Result<Mesh, String> {
+    if count == 0 {
+        return Ok(Mesh::default());
+    }
+    if !input.indices.len().is_multiple_of(3) || input.positions.is_empty() {
+        return Err("Scatter requires a triangle mesh input".to_string());
+    }
+
+    let mut areas = Vec::new();
+    let mut total = 0.0f32;
+    for tri in input.indices.chunks_exact(3) {
+        let i0 = tri[0] as usize;
+        let i1 = tri[1] as usize;
+        let i2 = tri[2] as usize;
+        if i0 >= input.positions.len()
+            || i1 >= input.positions.len()
+            || i2 >= input.positions.len()
+        {
+            areas.push(total);
+            continue;
+        }
+        let p0 = Vec3::from(input.positions[i0]);
+        let p1 = Vec3::from(input.positions[i1]);
+        let p2 = Vec3::from(input.positions[i2]);
+        let area = 0.5 * (p1 - p0).cross(p2 - p0).length();
+        total += area.max(0.0);
+        areas.push(total);
+    }
+
+    if total <= 0.0 {
+        return Err("Scatter requires non-degenerate triangles".to_string());
+    }
+
+    let mut rng = XorShift32::new(seed);
+    let mut positions = Vec::with_capacity(count);
+    let mut normals = Vec::with_capacity(count);
+
+    for _ in 0..count {
+        let sample = rng.next_f32() * total;
+        let tri_index = find_area_index(&areas, sample);
+        let tri = input
+            .indices
+            .get(tri_index * 3..tri_index * 3 + 3)
+            .ok_or_else(|| "scatter triangle index out of range".to_string())?;
+        let i0 = tri[0] as usize;
+        let i1 = tri[1] as usize;
+        let i2 = tri[2] as usize;
+        let p0 = Vec3::from(input.positions[i0]);
+        let p1 = Vec3::from(input.positions[i1]);
+        let p2 = Vec3::from(input.positions[i2]);
+
+        let r1 = rng.next_f32().clamp(0.0, 1.0);
+        let r2 = rng.next_f32().clamp(0.0, 1.0);
+        let sqrt_r1 = r1.sqrt();
+        let u = 1.0 - sqrt_r1;
+        let v = r2 * sqrt_r1;
+        let w = 1.0 - u - v;
+        let point = p0 * u + p1 * v + p2 * w;
+
+        let normal = (p1 - p0).cross(p2 - p0);
+        let normal = if normal.length_squared() > 0.0 {
+            normal.normalize().to_array()
+        } else {
+            [0.0, 1.0, 0.0]
+        };
+
+        positions.push(point.to_array());
+        normals.push(normal);
+    }
+
+    Ok(Mesh {
+        positions,
+        indices: Vec::new(),
+        normals: Some(normals),
+        corner_normals: None,
+        uvs: None,
+    })
+}
+
+fn find_area_index(cumulative: &[f32], sample: f32) -> usize {
+    let mut lo = 0usize;
+    let mut hi = cumulative.len();
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        if sample < cumulative[mid] {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    lo.min(cumulative.len().saturating_sub(1))
+}
+
+struct XorShift32 {
+    state: u32,
+}
+
+impl XorShift32 {
+    fn new(seed: u32) -> Self {
+        let seed = if seed == 0 { 0x12345678 } else { seed };
+        Self { state: seed }
+    }
+
+    fn next_u32(&mut self) -> u32 {
+        let mut x = self.state;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        self.state = x;
+        x
+    }
+
+    fn next_f32(&mut self) -> f32 {
+        let value = self.next_u32();
+        value as f32 / u32::MAX as f32
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -384,5 +549,29 @@ mod tests {
         let mesh =
             compute_mesh_node(BuiltinNodeKind::Merge, &NodeParams::default(), &[a, b]).unwrap();
         assert!(mesh.positions.len() >= 16);
+    }
+
+    #[test]
+    fn scatter_produces_points() {
+        let params = NodeParams {
+            values: BTreeMap::from([
+                ("count".to_string(), ParamValue::Int(12)),
+                ("seed".to_string(), ParamValue::Int(3)),
+            ]),
+        };
+        let input = make_box([1.0, 1.0, 1.0]);
+        let mesh = compute_mesh_node(BuiltinNodeKind::Scatter, &params, &[input]).unwrap();
+        assert_eq!(mesh.positions.len(), 12);
+        assert!(mesh.indices.is_empty());
+        assert_eq!(mesh.normals.as_ref().map(|n| n.len()), Some(12));
+    }
+
+    #[test]
+    fn normal_recomputes_normals() {
+        let mut input = make_box([1.0, 1.0, 1.0]);
+        input.normals = None;
+        let mesh =
+            compute_mesh_node(BuiltinNodeKind::Normal, &NodeParams::default(), &[input]).unwrap();
+        assert!(mesh.normals.is_some());
     }
 }

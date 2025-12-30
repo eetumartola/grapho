@@ -262,7 +262,7 @@ impl eframe::App for GraphoApp {
                 ui.separator();
                 ui.checkbox(
                     &mut self.project.settings.panels.show_inspector,
-                    "Inspector",
+                    "Parameters",
                 );
                 ui.checkbox(&mut self.project.settings.panels.show_debug, "Debug");
                 ui.checkbox(&mut self.project.settings.panels.show_console, "Console");
@@ -278,7 +278,7 @@ impl eframe::App for GraphoApp {
                 .default_width(280.0)
                 .show(ctx, |ui| {
                     if self.project.settings.panels.show_inspector {
-                        egui::CollapsingHeader::new("Inspector")
+                        egui::CollapsingHeader::new("Parameters")
                             .default_open(true)
                             .show(ui, |ui| {
                                 if self
@@ -612,6 +612,7 @@ fn scene_to_render(scene: &SceneSnapshot) -> RenderScene {
             positions: scene.mesh.positions.clone(),
             normals: scene.mesh.normals.clone(),
             indices: scene.mesh.indices.clone(),
+            corner_normals: scene.mesh.corner_normals.clone(),
         },
         base_color: scene.base_color,
     }

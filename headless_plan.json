@@ -1,0 +1,39 @@
+{
+  "nodes": [
+    {
+      "name": "Box",
+      "category": "Source",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "mesh",
+          "pin_type": "Mesh"
+        }
+      ]
+    },
+    {
+      "name": "Output",
+      "category": "Output",
+      "inputs": [
+        {
+          "name": "in",
+          "pin_type": "Mesh"
+        }
+      ],
+      "outputs": []
+    }
+  ],
+  "links": [
+    {
+      "from": {
+        "node": "Box",
+        "pin": "mesh"
+      },
+      "to": {
+        "node": "Output",
+        "pin": "in"
+      }
+    }
+  ],
+  "output_node": "Output"
+}

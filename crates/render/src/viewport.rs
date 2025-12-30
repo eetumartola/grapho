@@ -853,16 +853,16 @@ fn apply_scene_to_pipeline(
     pipeline: &mut PipelineState,
     scene: &RenderScene,
 ) {
-    let vertices = build_vertices(&scene.mesh);
+    let (vertices, indices) = build_vertices(&scene.mesh);
     pipeline.mesh_cache.upload_or_update(
         device,
         pipeline.mesh_id,
         bytemuck::cast_slice(&vertices),
-        &scene.mesh.indices,
+        &indices,
     );
 
     pipeline.mesh_vertices = vertices;
-    pipeline.index_count = scene.mesh.indices.len() as u32;
+    pipeline.index_count = indices.len() as u32;
     pipeline.mesh_bounds = bounds_from_positions(&scene.mesh.positions);
 
     let normals_vertices = normals_vertices(&pipeline.mesh_vertices, pipeline.normals_length);

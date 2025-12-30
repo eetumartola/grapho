@@ -107,7 +107,28 @@ pub(crate) fn bounds_from_positions(positions: &[[f32; 3]]) -> ([f32; 3], [f32; 
     (min, max)
 }
 
-pub(crate) fn build_vertices(mesh: &RenderMesh) -> Vec<Vertex> {
+pub(crate) fn build_vertices(mesh: &RenderMesh) -> (Vec<Vertex>, Vec<u32>) {
+    if let Some(corner_normals) = &mesh.corner_normals {
+        if corner_normals.len() == mesh.indices.len() {
+            let mut vertices = Vec::with_capacity(mesh.indices.len());
+            let mut indices = Vec::with_capacity(mesh.indices.len());
+            for (idx, corner) in mesh.indices.iter().enumerate() {
+                let position = mesh
+                    .positions
+                    .get(*corner as usize)
+                    .copied()
+                    .unwrap_or([0.0, 0.0, 0.0]);
+                let normal = corner_normals
+                    .get(idx)
+                    .copied()
+                    .unwrap_or([0.0, 1.0, 0.0]);
+                vertices.push(Vertex { position, normal });
+                indices.push(idx as u32);
+            }
+            return (vertices, indices);
+        }
+    }
+
     let mut vertices = Vec::with_capacity(mesh.positions.len());
     let fallback = [0.0, 1.0, 0.0];
     for (index, position) in mesh.positions.iter().enumerate() {
@@ -117,7 +138,7 @@ pub(crate) fn build_vertices(mesh: &RenderMesh) -> Vec<Vertex> {
             normal,
         });
     }
-    vertices
+    (vertices, mesh.indices.clone())
 }
 
 pub(crate) fn normals_vertices(vertices: &[Vertex], length: f32) -> Vec<LineVertex> {

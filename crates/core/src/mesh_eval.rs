@@ -61,6 +61,8 @@ pub fn evaluate_mesh_graph(
 
         let inputs = match kind {
             crate::nodes_builtin::BuiltinNodeKind::Transform
+            | crate::nodes_builtin::BuiltinNodeKind::Normal
+            | crate::nodes_builtin::BuiltinNodeKind::Scatter
             | crate::nodes_builtin::BuiltinNodeKind::Output => {
                 if let Some(mesh) = input_meshes.get(0).and_then(|mesh| mesh.clone()) {
                     vec![mesh]

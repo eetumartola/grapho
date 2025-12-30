@@ -24,6 +24,8 @@ pub struct NodeGraphState {
     add_menu_open: bool,
     add_menu_screen_pos: Pos2,
     add_menu_graph_pos: Pos2,
+    add_menu_filter: String,
+    add_menu_focus: bool,
     graph_transform: GraphTransformState,
     error_nodes: HashSet<NodeId>,
     error_messages: HashMap<NodeId, String>,
@@ -47,6 +49,8 @@ impl Default for NodeGraphState {
             add_menu_open: false,
             add_menu_screen_pos: Pos2::new(0.0, 0.0),
             add_menu_graph_pos: Pos2::new(0.0, 0.0),
+            add_menu_filter: String::new(),
+            add_menu_focus: false,
             graph_transform: GraphTransformState {
                 to_global: egui::emath::TSTransform::IDENTITY,
                 valid: false,
@@ -102,6 +106,8 @@ impl NodeGraphState {
     pub fn open_add_menu(&mut self, pos: Pos2) {
         self.add_menu_open = true;
         self.add_menu_screen_pos = pos;
+        self.add_menu_filter.clear();
+        self.add_menu_focus = true;
         if self.graph_transform.valid {
             self.add_menu_graph_pos = self.graph_transform.to_global.inverse() * pos;
         } else {
@@ -307,6 +313,7 @@ impl NodeGraphState {
     fn show_add_menu(&mut self, ui: &mut Ui, graph: &mut Graph) {
         let mut close_menu = ui.input(|i| i.key_pressed(egui::Key::Escape));
         let mut menu_rect = None;
+        let activate_first = ui.input(|i| i.key_pressed(egui::Key::Enter));
 
         let response = egui::Window::new("add_node_menu")
             .title_bar(false)
@@ -316,16 +323,48 @@ impl NodeGraphState {
             .frame(Frame::popup(ui.style()))
             .show(ui.ctx(), |ui| {
                 ui.label("Add node");
-                for kind in [
-                    BuiltinNodeKind::Box,
-                    BuiltinNodeKind::Grid,
-                    BuiltinNodeKind::Sphere,
-                    BuiltinNodeKind::Transform,
-                    BuiltinNodeKind::Merge,
-                    BuiltinNodeKind::CopyToPoints,
-                    BuiltinNodeKind::Output,
-                ] {
-                    if ui.button(kind.name()).clicked() {
+                ui.separator();
+                let search_id = ui.make_persistent_id("add_node_search");
+                let search = egui::TextEdit::singleline(&mut self.add_menu_filter)
+                    .id(search_id)
+                    .hint_text("Search...");
+                let search_response = ui.add(search);
+                if self.add_menu_focus {
+                    ui.memory_mut(|mem| mem.request_focus(search_id));
+                    self.add_menu_focus = false;
+                }
+                if search_response.has_focus() && activate_first {
+                    ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+                }
+
+                let filter = self.add_menu_filter.to_lowercase();
+                let mut last_category = None;
+                let mut matched = false;
+                let mut first_match: Option<BuiltinNodeKind> = None;
+                for item in builtin_menu_items() {
+                    if !filter.is_empty()
+                        && !item.name.to_lowercase().contains(&filter)
+                        && !item.category.to_lowercase().contains(&filter)
+                    {
+                        continue;
+                    }
+                    matched = true;
+                    if first_match.is_none() {
+                        first_match = Some(item.kind);
+                    }
+                    if last_category != Some(item.category) {
+                        ui.label(item.category);
+                        last_category = Some(item.category);
+                    }
+                    if ui.button(item.name).clicked() {
+                        self.try_add_node(graph, item.kind, self.add_menu_graph_pos);
+                        close_menu = true;
+                    }
+                }
+                if !matched {
+                    ui.label("No matches.");
+                } else if activate_first {
+                    if let Some(kind) = first_match {
                         self.try_add_node(graph, kind, self.add_menu_graph_pos);
                         close_menu = true;
                     }
@@ -499,17 +538,9 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
 
     fn show_graph_menu(&mut self, pos: Pos2, ui: &mut Ui, snarl: &mut Snarl<SnarlNode>) {
         ui.label("Add node");
-        for kind in [
-            BuiltinNodeKind::Box,
-            BuiltinNodeKind::Grid,
-            BuiltinNodeKind::Sphere,
-            BuiltinNodeKind::Transform,
-            BuiltinNodeKind::Merge,
-            BuiltinNodeKind::CopyToPoints,
-            BuiltinNodeKind::Output,
-        ] {
-            if ui.button(kind.name()).clicked() {
-                self.add_node(snarl, kind, pos);
+        for item in builtin_menu_items() {
+            if ui.button(item.name).clicked() {
+                self.add_node(snarl, item.kind, pos);
                 ui.close();
             }
         }
@@ -704,18 +735,38 @@ fn add_builtin_node(
 fn edit_param(ui: &mut Ui, label: &str, value: core::ParamValue) -> (core::ParamValue, bool) {
     match value {
         core::ParamValue::Float(mut v) => {
-            let response = ui.horizontal(|ui| {
+            let mut changed = false;
+            ui.horizontal(|ui| {
                 ui.label(label);
-                ui.add(egui::DragValue::new(&mut v).speed(0.1))
+                if ui.add(egui::DragValue::new(&mut v).speed(0.1)).changed() {
+                    changed = true;
+                }
+                let range = float_slider_range(label, v);
+                if ui
+                    .add(egui::Slider::new(&mut v, range).show_value(false))
+                    .changed()
+                {
+                    changed = true;
+                }
             });
-            (core::ParamValue::Float(v), response.inner.changed())
+            (core::ParamValue::Float(v), changed)
         }
         core::ParamValue::Int(mut v) => {
-            let response = ui.horizontal(|ui| {
+            let mut changed = false;
+            ui.horizontal(|ui| {
                 ui.label(label);
-                ui.add(egui::DragValue::new(&mut v).speed(1.0))
+                if ui.add(egui::DragValue::new(&mut v).speed(1.0)).changed() {
+                    changed = true;
+                }
+                let range = int_slider_range(label, v);
+                if ui
+                    .add(egui::Slider::new(&mut v, range).show_value(false))
+                    .changed()
+                {
+                    changed = true;
+                }
             });
-            (core::ParamValue::Int(v), response.inner.changed())
+            (core::ParamValue::Int(v), changed)
         }
         core::ParamValue::Bool(mut v) => {
             let response = ui.checkbox(&mut v, label);
@@ -746,4 +797,74 @@ fn edit_param(ui: &mut Ui, label: &str, value: core::ParamValue) -> (core::Param
             (core::ParamValue::Vec3(v), changed)
         }
     }
+}
+
+fn float_slider_range(label: &str, _value: f32) -> std::ops::RangeInclusive<f32> {
+    match label {
+        "threshold_deg" => 0.0..=180.0,
+        _ => -1000.0..=1000.0,
+    }
+}
+
+fn int_slider_range(label: &str, _value: i32) -> std::ops::RangeInclusive<i32> {
+    match label {
+        "rows" | "cols" => 2..=64,
+        _ => -1000..=1000,
+    }
+}
+
+struct MenuItem {
+    kind: BuiltinNodeKind,
+    name: &'static str,
+    category: &'static str,
+}
+
+fn builtin_menu_items() -> Vec<MenuItem> {
+    vec![
+        MenuItem {
+            kind: BuiltinNodeKind::Box,
+            name: "Box",
+            category: "Sources",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::Grid,
+            name: "Grid",
+            category: "Sources",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::Sphere,
+            name: "Sphere",
+            category: "Sources",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::Scatter,
+            name: "Scatter",
+            category: "Operators",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::Transform,
+            name: "Transform",
+            category: "Operators",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::Merge,
+            name: "Merge",
+            category: "Operators",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::CopyToPoints,
+            name: "Copy to Points",
+            category: "Operators",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::Normal,
+            name: "Normal",
+            category: "Operators",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::Output,
+            name: "Output",
+            category: "Outputs",
+        },
+    ]
 }

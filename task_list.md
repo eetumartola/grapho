@@ -30,7 +30,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### A4. Headless CLI examples + smoke check
 
 **Depends:** A3
-**Status:** pending
+**Status:** done
 
 * Add a sample `headless_plan.json` in repo root
 * Add a simple CI/local smoke step: `cargo run -- --headless --plan headless_plan.json`
@@ -106,7 +106,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### C2. Camera controls (orbit/pan/dolly)
 
 **Depends:** C1
-**Status:** in progress
+**Status:** done
 
 #### C2a. Input + settings (orbit/pan/dolly)
 
@@ -117,7 +117,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 #### C2b. Apply camera to rendering
 
-**Status:** in progress
+**Status:** done
 
 * Mouse: orbit (LMB), pan (MMB), dolly (wheel) (bindings adjustable)
 * Camera state in app settings
@@ -139,7 +139,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### C4. GPU mesh cache (upload/update)
 
 **Depends:** C3
-**Status:** in progress
+**Status:** done
 
 * A `GpuMeshCache` keyed by mesh ID/hash
 * Update GPU buffers only when mesh changes
@@ -309,6 +309,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### F5. Subdivide node (simple)
 
 **Depends:** F1, E1
+**Status:** pending
 
 * Start with a straightforward scheme (even naive)
   **Acceptance**
@@ -321,8 +322,28 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 **Status:** done
 
 * One designated graph output for v1
-  **Acceptance**
+**Acceptance**
 * Eval can "start from output node" reliably
+
+### F8. Scatter node
+
+**Depends:** F1, E1
+**Status:** done
+
+* Scatter points over triangle surfaces
+* Count + seed controls
+  **Acceptance**
+* Outputs points with normals
+* Stable output for a fixed seed
+
+### F9. Normal node
+
+**Depends:** F1, E1
+**Status:** done
+
+* Recompute normals for a mesh
+  **Acceptance**
+* Produces valid vertex normals on triangle meshes
 
 ---
 
@@ -354,6 +375,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### G3. Add-node search / palette
 
 **Depends:** G1
+**Status:** done
 
 * Searchable list by category + fuzzy match
   **Acceptance**
@@ -363,6 +385,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### G4. Graph UX polish (minimum viable)
 
 **Depends:** G1
+**Status:** in progress
 
 * Multi-select, delete, duplicate
 * Basic keyboard shortcuts: delete, ctrl+z/y (if undo exists)
@@ -398,6 +421,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### H3. Error visualization in node UI + console
 
 **Depends:** E4, G1
+**Status:** done
 
 * Node with errors shows a small badge/marker
 * Clicking error jumps to node (optional)
@@ -411,6 +435,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### I1. Debug panel: evaluation report viewer
 
 **Depends:** E4, H2
+**Status:** done
 
 * Sort nodes by time, show cache hits/misses
 * "Recompute all" button
@@ -421,6 +446,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### I2. Dirty view
 
 **Depends:** E3
+**Status:** pending
 
 * Show which nodes are dirty and why (param changed vs upstream)
   **Acceptance**

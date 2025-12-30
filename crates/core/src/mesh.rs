@@ -11,6 +11,7 @@ pub struct Mesh {
     pub positions: Vec<[f32; 3]>,
     pub indices: Vec<u32>,
     pub normals: Option<Vec<[f32; 3]>>,
+    pub corner_normals: Option<Vec<[f32; 3]>>,
     pub uvs: Option<Vec<[f32; 2]>>,
 }
 
@@ -24,6 +25,7 @@ impl Mesh {
             positions,
             indices,
             normals: None,
+            corner_normals: None,
             uvs: None,
         }
     }
@@ -86,6 +88,90 @@ impl Mesh {
             .collect();
 
         self.normals = Some(normals);
+        self.corner_normals = None;
+        true
+    }
+
+    pub fn compute_normals_with_threshold(&mut self, threshold_degrees: f32) -> bool {
+        if !self.indices.len().is_multiple_of(3) || self.positions.is_empty() {
+            return false;
+        }
+
+        let threshold = threshold_degrees.clamp(0.0, 180.0);
+        if threshold >= 179.9 {
+            return self.compute_normals();
+        }
+
+        let cos_threshold = threshold.to_radians().cos();
+        let tri_count = self.indices.len() / 3;
+        let mut face_normals = Vec::with_capacity(tri_count);
+        let mut face_indices = Vec::with_capacity(tri_count);
+
+        for tri in self.indices.chunks_exact(3) {
+            let i0 = tri[0] as usize;
+            let i1 = tri[1] as usize;
+            let i2 = tri[2] as usize;
+            if i0 >= self.positions.len()
+                || i1 >= self.positions.len()
+                || i2 >= self.positions.len()
+            {
+                return false;
+            }
+            let p0 = Vec3::from(self.positions[i0]);
+            let p1 = Vec3::from(self.positions[i1]);
+            let p2 = Vec3::from(self.positions[i2]);
+            let normal = (p1 - p0).cross(p2 - p0);
+            let normal = if normal.length_squared() > 0.0 {
+                normal.normalize()
+            } else {
+                Vec3::Y
+            };
+            face_normals.push(normal);
+            face_indices.push([i0, i1, i2]);
+        }
+
+        let mut groups = std::collections::HashMap::new();
+        for (index, position) in self.positions.iter().enumerate() {
+            let key = quantize_position(*position);
+            groups.entry(key).or_insert_with(Vec::new).push(index);
+        }
+
+        let mut adjacency: Vec<Vec<usize>> = vec![Vec::new(); self.positions.len()];
+        for (face_index, indices) in face_indices.iter().enumerate() {
+            for &pos_index in indices {
+                let key = quantize_position(self.positions[pos_index]);
+                if let Some(group) = groups.get(&key) {
+                    for &member in group {
+                        adjacency[member].push(face_index);
+                    }
+                } else {
+                    adjacency[pos_index].push(face_index);
+                }
+            }
+        }
+
+        let mut corner_normals = Vec::with_capacity(self.indices.len());
+        for (face_index, indices) in face_indices.iter().enumerate() {
+            let face_normal = face_normals[face_index];
+            for &pos_index in indices {
+                let mut sum = Vec3::ZERO;
+                for &adj_face in &adjacency[pos_index] {
+                    let candidate = face_normals[adj_face];
+                    if candidate.dot(face_normal) >= cos_threshold {
+                        sum += candidate;
+                    }
+                }
+                let sum = if sum.length_squared() > 0.0 {
+                    sum.normalize()
+                } else {
+                    face_normal
+                };
+                corner_normals.push(sum.to_array());
+            }
+        }
+
+        let _ = self.compute_normals();
+        self.corner_normals = Some(corner_normals);
         true
     }
 
@@ -107,6 +193,19 @@ impl Mesh {
                 };
             }
         }
+
+        if let Some(corner_normals) = &mut self.corner_normals {
+            let normal_matrix = matrix.inverse().transpose();
+            for n in corner_normals {
+                let v = normal_matrix.transform_vector3(Vec3::from(*n));
+                let len = v.length();
+                *n = if len > 0.0 {
+                    (v / len).to_array()
+                } else {
+                    [0.0, 1.0, 0.0]
+                };
+            }
+        }
     }
 
     pub fn merge(meshes: &[Mesh]) -> Mesh {
@@ -114,10 +213,12 @@ impl Mesh {
         let mut vertex_offset = 0u32;
         let mut include_normals = true;
         let mut include_uvs = true;
+        let mut include_corner_normals = true;
 
         for mesh in meshes {
             include_normals &= mesh.normals.is_some();
             include_uvs &= mesh.uvs.is_some();
+            include_corner_normals &= mesh.corner_normals.is_some();
         }
 
         for mesh in meshes {
@@ -144,8 +245,25 @@ impl Mesh {
             merged.uvs = Some(uvs);
         }
 
+        if include_corner_normals {
+            let mut corner_normals = Vec::new();
+            for mesh in meshes {
+                corner_normals.extend_from_slice(mesh.corner_normals.as_ref().unwrap());
+            }
+            merged.corner_normals = Some(corner_normals);
+        }
+
         merged
     }
+}
+
+fn quantize_position(position: [f32; 3]) -> (i32, i32, i32) {
+    let epsilon = 1.0e-5;
+    (
+        (position[0] / epsilon).round() as i32,
+        (position[1] / epsilon).round() as i32,
+        (position[2] / epsilon).round() as i32,
+    )
 }
 
 pub fn make_box(size: [f32; 3]) -> Mesh {
@@ -207,7 +325,7 @@ pub fn make_grid(size: [f32; 2], divisions: [u32; 2]) -> Mesh {
             let i2 = i0 + stride;
             let i3 = i2 + 1;
 
-            indices.extend_from_slice(&[i0, i2, i1, i1, i2, i3]);
+            indices.extend_from_slice(&[i0, i1, i2, i1, i3, i2]);
         }
     }
 
@@ -246,11 +364,30 @@ pub fn make_uv_sphere(radius: f32, rows: u32, cols: u32) -> Mesh {
             let i1 = i0 + 1;
             let i2 = i0 + stride;
             let i3 = i2 + 1;
-            indices.extend_from_slice(&[i0, i2, i1, i1, i2, i3]);
+            indices.extend_from_slice(&[i0, i1, i2, i1, i3, i2]);
         }
     }
 
-    Mesh::with_positions_indices(positions, indices)
+    let normals = positions
+        .iter()
+        .map(|p| {
+            let v = Vec3::from(*p);
+            let len = v.length();
+            if len > 0.0 {
+                (v / len).to_array()
+            } else {
+                [0.0, 1.0, 0.0]
+            }
+        })
+        .collect();
+
+    Mesh {
+        positions,
+        indices,
+        normals: Some(normals),
+        corner_normals: None,
+        uvs: None,
+    }
 }
 
 #[cfg(test)]
