@@ -1,5 +1,6 @@
-The project is a lightweight "Houdini-lite"or "Geometrynodes-lite" node based geometry editor.
-It should be able to run on the web. It should initially have a 3d viewport and a DAG node view, with options for future enlargement of scope.
+The project is a lightweight "Houdini-lite" or "Geometrynodes-lite" node based geometry editor.
+It should run on the web, with Windows 11 as the primary target and web as the secondary target.
+It should initially have a 3D viewport and a DAG node view, with options for future enlargement of scope.
 ---
 
 ## Technology and stack
@@ -8,7 +9,7 @@ It should be able to run on the web. It should initially have a 3d viewport and 
 
 * **Rust**
 * **egui + eframe** (fastest path to native + later wasm)
-* Docking/layout: `egui_dock` or `egui_tiles` (either works; tiles tends to be “layout-tree” friendly)
+* Layout: simple split view between Viewport and Node Graph, configurable by percentage in settings (drag resize later)
 
 ### Node editor
 
@@ -17,7 +18,7 @@ It should be able to run on the web. It should initially have a 3d viewport and 
 ### Rendering
 
 * **wgpu** for the viewport
-* Shading: **“simple lit”**:
+* Shading: **"simple lit"**:
 
   * directional light + ambient
   * optional image-based ambient later
@@ -26,7 +27,7 @@ It should be able to run on the web. It should initially have a 3d viewport and 
 ### Utilities
 
 * `glam` math
-* `serde` + `ron` (or json) project persistence
+* `serde` + JSON project persistence
 
 ---
 
@@ -34,7 +35,7 @@ It should be able to run on the web. It should initially have a 3d viewport and 
 
 ### 1) `core` crate (headless, testable)
 
-**Owns the “truth”**
+**Owns the "truth"**
 
 * `Project` (graphs, node params, global settings)
 * `Graph` model (nodes/pins/links)
@@ -48,7 +49,7 @@ It should be able to run on the web. It should initially have a 3d viewport and 
 
 **Geometry kernel**
 
-* `Mesh` (positions, indices, normals, uvs, colors…)
+* `Mesh` (positions, indices, normals, uvs, colors?)
 * Minimal attribute model:
 
   * Start with built-ins (P/N/uv/color)
@@ -76,7 +77,7 @@ It should be able to run on the web. It should initially have a 3d viewport and 
 
 ### 3) `app` crate (egui + orchestration)
 
-* Window layout: Viewport / Node graph / Inspector / Debug panel / Console
+* Window layout: Viewport / Node graph, plus optional Inspector / Debug / Console panels
 * State:
 
   * UI state (panels, selection in node graph, camera settings)
@@ -87,7 +88,7 @@ It should be able to run on the web. It should initially have a 3d viewport and 
 
 ### 4) `io` crate (optional, can start in core)
 
-* Save/load project (`serde`)
+* Save/load project (`serde` JSON)
 * Later: export mesh (glTF/OBJ) if wanted
 
 ---
@@ -128,7 +129,7 @@ Caching/dirty:
 
 ## Viewport shading spec (better than unlit, not full PBR)
 
-### “Simple Lit” v1
+### "Simple Lit" v1
 
 * Vertex normals required (generate if missing)
 * One directional light:
@@ -173,27 +174,28 @@ This is enough to read form well, without implementing full PBR + IBL.
 * Per-node timing + cache hit/miss
 * Dirty propagation view (which nodes are dirty)
 * Error list with node references
-* “Recompute all” button
+* "Recompute all" button
 
 ---
 
 ## Revised milestone plan
 
-### Milestone 1 — App shell + layout + renderer bootstrap
+### Milestone 1 " App shell + layout + renderer bootstrap
 
 Deliverables:
 
-* eframe app with dock/tile layout:
+* eframe app with split layout:
 
   * Viewport
   * Node Graph
   * Inspector
   * Debug
   * Console/Log
+* Settings include viewport/node split percentage
 * wgpu clears viewport + basic camera controls
 * Project skeleton saved/loaded
 
-### Milestone 2 — Viewport “simple lit” + debug primitives
+### Milestone 2 " Viewport "simple lit" + debug primitives
 
 Deliverables:
 
@@ -202,7 +204,7 @@ Deliverables:
 * Debug panel toggles grid/axes, shading mode (lit/unlit/normal/depth)
 * On-screen stats overlay
 
-### Milestone 3 — Node editor (egui-snarl) integrated with core graph model
+### Milestone 3 " Node editor (egui-snarl) integrated with core graph model
 
 Deliverables:
 
@@ -212,7 +214,7 @@ Deliverables:
 * Node search/add menu
 * Persist graph in project save
 
-### Milestone 4 — Headless evaluation engine (tests) + minimal geometry nodes
+### Milestone 4 " Headless evaluation engine (tests) + minimal geometry nodes
 
 Deliverables:
 
@@ -227,7 +229,7 @@ Deliverables:
   * `NormalCompute` (if needed)
   * `Output`
 
-### Milestone 5 — Graph drives viewport
+### Milestone 5 " Graph drives viewport
 
 Deliverables:
 
@@ -235,7 +237,7 @@ Deliverables:
 * Changing params recomputes incrementally
 * Evaluation report appears in Debug panel (timings/cache/errors)
 
-### Milestone 6 — Tool usability essentials
+### Milestone 6 " Tool usability essentials
 
 Deliverables:
 
@@ -243,7 +245,7 @@ Deliverables:
 * Copy/paste nodes (optional but big UX win)
 * Better error UX (node tinted, error message in node footer)
 
-### Milestone 7 — Web build (secondary)
+### Milestone 7 " Web build (secondary)
 
 Deliverables:
 
@@ -251,7 +253,7 @@ Deliverables:
 * File handling via browser download/upload or local storage
 * Note: shader pipeline uses WGSL path for web
 
-### Milestone 8 — Offline renderer “view” foundation (later)
+### Milestone 8 " Offline renderer "view" foundation (later)
 
 Deliverables:
 

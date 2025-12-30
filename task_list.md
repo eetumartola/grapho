@@ -1,12 +1,12 @@
-Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl, display-only viewport, “simple lit” shading, debug options). It’s organized as **Epics → Tasks**, each with **acceptance criteria** and **dependencies**.
+Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl, display-only viewport, "simple lit" shading, debug options). It is organized as **Epics + Tasks**, each with **acceptance criteria** and **dependencies**.
 
 ---
 
-## Epic A — Repo + foundations
+## Epic A " Repo + foundations
 
 ### A1. Create workspace + CI
 
-**Depends:** —
+**Depends:** "
 
 * Create Cargo workspace: `core/`, `render/`, `app/` (+ optional `nodes_builtin/`)
 * Add basic CI: `cargo fmt`, `cargo clippy`, `cargo test`
@@ -20,31 +20,32 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 **Depends:** A1
 
 * Add logging (`tracing` + `tracing-subscriber`)
-* Create app-level “Console” panel showing recent logs
+* Create app-level "Console" panel showing recent logs
   **Acceptance**
 * Logs visible in app Console panel
 * Log level adjustable (Info/Debug/Trace) at runtime (even if crude)
 
 ---
 
-## Epic B — App shell + docking layout
+## Epic B " App shell + layout
 
-### B1. eframe app with dock/tile layout
+### B1. eframe app with split layout
 
 **Depends:** A1
 
 * Implement panels: Viewport, Node Graph, Inspector, Debug, Console
-* Use `egui_tiles` or `egui_dock`
+* Split ratio between Viewport and Node Graph is configurable in settings (percentage)
   **Acceptance**
-* Panels visible, resizable, rearrangeable
-* Layout state saved/restored in project or app settings
+* Viewport and Node Graph visible and resizable via the split ratio
+* Split ratio persists in settings
+* Panels can be shown/hidden via simple toggles (no docking required)
 
 ### B2. Project load/save scaffold
 
 **Depends:** A1
 
 * Define `core::Project` (minimal)
-* Serialize with `serde` + RON (or JSON)
+* Serialize with `serde` + JSON
 * File menu: New/Open/Save/Save As
   **Acceptance**
 * Can save, close, reopen and restore layout + empty graph
@@ -52,7 +53,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 ---
 
-## Epic C — Renderer baseline (display-only viewport)
+## Epic C " Renderer baseline (display-only viewport)
 
 ### C1. WGPU integration in Viewport panel
 
@@ -72,7 +73,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Camera state in app settings
   **Acceptance**
 * Camera feels consistent, no gimbal weirdness for standard orbit
-* “Frame object” works once there is any mesh (even placeholder)
+* "Frame object" works once there is any mesh (even placeholder)
 
 ### C3. Simple lit shading pipeline
 
@@ -91,12 +92,12 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * A `GpuMeshCache` keyed by mesh ID/hash
 * Update GPU buffers only when mesh changes
   **Acceptance**
-* Changing a parameter that doesn’t alter geometry doesn’t reupload buffers
-* Mesh updates don’t leak GPU memory over repeated changes
+* Changing a parameter that doesn't alter geometry doesn't reupload buffers
+* Mesh updates don't leak GPU memory over repeated changes
 
 ---
 
-## Epic D — Debug display options (render + stats)
+## Epic D " Debug display options (render + stats)
 
 ### D1. Render debug overlays: grid + axes
 
@@ -145,7 +146,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 ---
 
-## Epic E — Core graph model + evaluation engine
+## Epic E " Core graph model + evaluation engine
 
 ### E1. Graph data model
 
@@ -178,7 +179,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
   **Acceptance**
 * Unit tests verify:
 
-  * unchanged params don’t recompute downstream
+  * unchanged params don't recompute downstream
   * changing upstream recomputes only affected subtree
 * Cache hit/miss stats recorded
 
@@ -194,7 +195,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 ---
 
-## Epic F — Built-in nodes (small but useful)
+## Epic F " Built-in nodes (small but useful)
 
 ### F1. Geometry kernel: `Mesh` and helpers
 
@@ -236,7 +237,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Start with a straightforward scheme (even naive)
   **Acceptance**
 * Subdivision increases triangle count predictably
-* Doesn’t explode memory on moderate settings (guardrails)
+* Doesn't explode memory on moderate settings (guardrails)
 
 ### F6. Output node (final)
 
@@ -244,13 +245,13 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 * One designated graph output for v1
   **Acceptance**
-* Eval can “start from output node” reliably
+* Eval can "start from output node" reliably
 
 ---
 
-## Epic G — egui-snarl node editor integration
+## Epic G " egui-snarl node editor integration
 
-### G1. UI graph adapter (core ↔ snarl)
+### G1. UI graph adapter (core + snarl)
 
 **Depends:** B1, E1
 
@@ -291,7 +292,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 ---
 
-## Epic H — Connect evaluation to viewport
+## Epic H " Connect evaluation to viewport
 
 ### H1. SceneSnapshot boundary
 
@@ -310,7 +311,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Evaluate when graph changes or params change
 * Optional debounce for continuous slider drags
   **Acceptance**
-* Changing params updates viewport quickly without “recompute storms”
+* Changing params updates viewport quickly without "recompute storms"
 * Debug panel shows last eval duration + node timings
 
 ### H3. Error visualization in node UI + console
@@ -324,14 +325,14 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 ---
 
-## Epic I — Debug/evaluation UI
+## Epic I " Debug/evaluation UI
 
 ### I1. Debug panel: evaluation report viewer
 
 **Depends:** E4, H2
 
 * Sort nodes by time, show cache hits/misses
-* “Recompute all” button
+* "Recompute all" button
   **Acceptance**
 * You can identify the slowest node quickly
 * Cache behavior is visible and plausible
@@ -346,7 +347,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 ---
 
-## Epic J — Undo/redo + persistence polish
+## Epic J " Undo/redo + persistence polish
 
 ### J1. Command system (graph + params)
 
@@ -362,14 +363,14 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 **Depends:** B2, J1
 
-* Ensure node IDs persist and don’t collide after load
+* Ensure node IDs persist and don't collide after load
 * Add project version field
   **Acceptance**
 * Loading old files either works or gives a clear migration error
 
 ---
 
-## Epic K — Web build (secondary)
+## Epic K " Web build (secondary)
 
 ### K1. wasm build proof
 
@@ -385,13 +386,13 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 ## Optional Epics (later, but worth parking)
 
-### L — Offline renderer view foundation
+### L " Offline renderer view foundation
 
 * L1: Expand `SceneSnapshot` to support multiple objects/lights/material params
-* L2: Add “Offline Render” panel stub (still output or progressive preview)
+* L2: Add "Offline Render" panel stub (still output or progressive preview)
 * L3: Implement simple CPU or GPU progressive renderer (your call)
 
-### M — Quality-of-life tooling
+### M " Quality-of-life tooling
 
 * M1: Hot-reload shaders (native)
 * M2: Node presets / templates
@@ -399,12 +400,11 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 ---
 
-## Suggested implementation order (fastest to “feels real”)
+## Suggested implementation order (fastest to "feels real")
 
-1. A1 → B1 → C1 → C2 → C3
-2. D1 → D2 → D4 (get debug early)
-3. E1 → E2 → E3 → F1 → F2/F3/F6
-4. G1 → G2 → H1 → H2 → I1
+1. A1 + B1 + C1 + C2 + C3
+2. D1 + D2 + D4 (get debug early)
+3. E1 + E2 + E3 + F1 + F2/F3/F6
+4. G1 + G2 + H1 + H2 + I1
 5. Add polish: D3, G3, J1, I2, J2
 6. Web: K1
-
