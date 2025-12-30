@@ -353,8 +353,8 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 layout: Some(&pipeline_layout),
                 vertex: egui_wgpu::wgpu::VertexState {
                     module: &shader,
-                    entry_point: "vs_main",
-                    compilation_options: Default::default(),
+                    entry_point: Some("vs_main"),
+                    compilation_options: egui_wgpu::wgpu::PipelineCompilationOptions::default(),
                     buffers: &[egui_wgpu::wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<Vertex>()
                             as egui_wgpu::wgpu::BufferAddress,
@@ -364,8 +364,8 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 },
                 fragment: Some(egui_wgpu::wgpu::FragmentState {
                     module: &shader,
-                    entry_point: "fs_main",
-                    compilation_options: Default::default(),
+                    entry_point: Some("fs_main"),
+                    compilation_options: egui_wgpu::wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(egui_wgpu::wgpu::ColorTargetState {
                         format: target_format,
                         blend: Some(egui_wgpu::wgpu::BlendState::REPLACE),
@@ -385,6 +385,7 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 }),
                 multisample: egui_wgpu::wgpu::MultisampleState::default(),
                 multiview: None,
+                cache: None,
             });
 
         let line_pipeline =
@@ -393,8 +394,8 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 layout: Some(&pipeline_layout),
                 vertex: egui_wgpu::wgpu::VertexState {
                     module: &shader,
-                    entry_point: "vs_line",
-                    compilation_options: Default::default(),
+                    entry_point: Some("vs_line"),
+                    compilation_options: egui_wgpu::wgpu::PipelineCompilationOptions::default(),
                     buffers: &[egui_wgpu::wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<LineVertex>()
                             as egui_wgpu::wgpu::BufferAddress,
@@ -404,8 +405,8 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 },
                 fragment: Some(egui_wgpu::wgpu::FragmentState {
                     module: &shader,
-                    entry_point: "fs_line",
-                    compilation_options: Default::default(),
+                    entry_point: Some("fs_line"),
+                    compilation_options: egui_wgpu::wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(egui_wgpu::wgpu::ColorTargetState {
                         format: target_format,
                         blend: Some(egui_wgpu::wgpu::BlendState::REPLACE),
@@ -425,6 +426,7 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 }),
                 multisample: egui_wgpu::wgpu::MultisampleState::default(),
                 multiview: None,
+                cache: None,
             });
 
         let blit_shader = device.create_shader_module(egui_wgpu::wgpu::ShaderModuleDescriptor {
@@ -515,14 +517,14 @@ fn fs_blit(input: BlitOut) -> @location(0) vec4<f32> {
                 layout: Some(&blit_pipeline_layout),
                 vertex: egui_wgpu::wgpu::VertexState {
                     module: &blit_shader,
-                    entry_point: "vs_blit",
-                    compilation_options: Default::default(),
+                    entry_point: Some("vs_blit"),
+                    compilation_options: egui_wgpu::wgpu::PipelineCompilationOptions::default(),
                     buffers: &[],
                 },
                 fragment: Some(egui_wgpu::wgpu::FragmentState {
                     module: &blit_shader,
-                    entry_point: "fs_blit",
-                    compilation_options: Default::default(),
+                    entry_point: Some("fs_blit"),
+                    compilation_options: egui_wgpu::wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(egui_wgpu::wgpu::ColorTargetState {
                         format: target_format,
                         blend: Some(egui_wgpu::wgpu::BlendState::REPLACE),
@@ -533,6 +535,7 @@ fn fs_blit(input: BlitOut) -> @location(0) vec4<f32> {
                 depth_stencil: None,
                 multisample: egui_wgpu::wgpu::MultisampleState::default(),
                 multiview: None,
+                cache: None,
             });
 
         let (offscreen_texture, offscreen_view, depth_texture, depth_view) =
@@ -756,6 +759,7 @@ impl CallbackTrait for ViewportCallback {
                     color_attachments: &[Some(egui_wgpu::wgpu::RenderPassColorAttachment {
                         view: &pipeline.offscreen_view,
                         resolve_target: None,
+                        depth_slice: None,
                         ops: egui_wgpu::wgpu::Operations {
                             load: egui_wgpu::wgpu::LoadOp::Clear(egui_wgpu::wgpu::Color {
                                 r: 28.0 / 255.0,
@@ -819,11 +823,11 @@ impl CallbackTrait for ViewportCallback {
         Vec::new()
     }
 
-    fn paint<'a>(
-        &'a self,
+    fn paint(
+        &self,
         info: egui::epaint::PaintCallbackInfo,
-        render_pass: &mut egui_wgpu::wgpu::RenderPass<'a>,
-        callback_resources: &'a CallbackResources,
+        render_pass: &mut egui_wgpu::wgpu::RenderPass<'static>,
+        callback_resources: &CallbackResources,
     ) {
         let viewport = info.viewport_in_pixels();
         if viewport.width_px <= 0 || viewport.height_px <= 0 {

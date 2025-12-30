@@ -201,11 +201,11 @@ impl eframe::App for GraphoApp {
             }
         }
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("New").clicked() {
                         self.new_project();
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     if ui.button("Open...").clicked() {
@@ -223,7 +223,7 @@ impl eframe::App for GraphoApp {
                                 }
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     if ui.button("Save").clicked() {
@@ -236,7 +236,7 @@ impl eframe::App for GraphoApp {
                         } else {
                             tracing::warn!("no project path set; use Save As");
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     if ui.button("Save As...").clicked() {
@@ -255,7 +255,7 @@ impl eframe::App for GraphoApp {
                                 }
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -484,7 +484,7 @@ impl eframe::App for GraphoApp {
             let left_rect = egui::Rect::from_min_max(rect.min, egui::pos2(split_x, rect.max.y));
             let right_rect = egui::Rect::from_min_max(egui::pos2(split_x, rect.min.y), rect.max);
 
-            ui.allocate_ui_at_rect(left_rect, |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(left_rect), |ui| {
                 ui.heading("Viewport");
                 let available = ui.available_size();
                 let (rect, response) =
@@ -531,7 +531,7 @@ impl eframe::App for GraphoApp {
                             stats.cache_uploads
                         );
                         let font_id = egui::FontId::monospace(12.0);
-                        let galley = ui.fonts(|f| {
+                        let galley = ui.fonts_mut(|f| {
                             f.layout_no_wrap(text.clone(), font_id.clone(), egui::Color32::WHITE)
                         });
                         let padding = egui::vec2(6.0, 4.0);
@@ -558,7 +558,7 @@ impl eframe::App for GraphoApp {
                 }
             });
 
-            ui.allocate_ui_at_rect(right_rect, |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(right_rect), |ui| {
                 ui.heading("Node Graph");
                 self.node_graph
                     .show(ui, &mut self.project.graph, &mut self.eval_dirty);

@@ -31,9 +31,7 @@ pub struct NodeGraphState {
 
 #[derive(Clone, Copy)]
 struct GraphTransformState {
-    scale: f32,
-    offset: egui::Vec2,
-    center: Pos2,
+    to_global: egui::emath::TSTransform,
     valid: bool,
 }
 
@@ -50,9 +48,7 @@ impl Default for NodeGraphState {
             add_menu_screen_pos: Pos2::new(0.0, 0.0),
             add_menu_graph_pos: Pos2::new(0.0, 0.0),
             graph_transform: GraphTransformState {
-                scale: 1.0,
-                offset: egui::Vec2::ZERO,
-                center: Pos2::new(0.0, 0.0),
+                to_global: egui::emath::TSTransform::IDENTITY,
                 valid: false,
             },
             error_nodes: HashSet::new(),
@@ -86,7 +82,7 @@ impl NodeGraphState {
         };
         let style = SnarlStyle {
             pin_size: Some(10.0),
-            bg_frame: Some(Frame::none().fill(Color32::from_rgb(18, 18, 18))),
+            bg_frame: Some(Frame::NONE.fill(Color32::from_rgb(18, 18, 18))),
             bg_pattern: Some(BackgroundPattern::grid(vec2(64.0, 64.0), 0.0)),
             bg_pattern_stroke: Some(Stroke::new(1.0, Color32::from_rgb(26, 26, 26))),
             ..SnarlStyle::default()
@@ -107,10 +103,7 @@ impl NodeGraphState {
         self.add_menu_open = true;
         self.add_menu_screen_pos = pos;
         if self.graph_transform.valid {
-            let graph_pos =
-                (pos.to_vec2() + self.graph_transform.offset - self.graph_transform.center.to_vec2())
-                    / self.graph_transform.scale;
-            self.add_menu_graph_pos = graph_pos.to_pos2();
+            self.add_menu_graph_pos = self.graph_transform.to_global.inverse() * pos;
         } else {
             self.add_menu_graph_pos = self.next_pos;
         }
@@ -448,7 +441,6 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         _inputs: &[egui_snarl::InPin],
         _outputs: &[egui_snarl::OutPin],
         ui: &mut Ui,
-        _scale: f32,
         snarl: &mut Snarl<SnarlNode>,
     ) {
         let title = self.title(&snarl[node]);
@@ -473,9 +465,8 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         &mut self,
         pin: &egui_snarl::InPin,
         ui: &mut Ui,
-        _scale: f32,
         snarl: &mut Snarl<SnarlNode>,
-    ) -> PinInfo {
+    ) -> impl egui_snarl::ui::SnarlPin + 'static {
         if let Some(core_pin) = self.core_pin_for_input(snarl, pin.id) {
             if let Some(pin_data) = self.graph.pin(core_pin) {
                 ui.label(&pin_data.name);
@@ -490,9 +481,8 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         &mut self,
         pin: &egui_snarl::OutPin,
         ui: &mut Ui,
-        _scale: f32,
         snarl: &mut Snarl<SnarlNode>,
-    ) -> PinInfo {
+    ) -> impl egui_snarl::ui::SnarlPin + 'static {
         if let Some(core_pin) = self.core_pin_for_output(snarl, pin.id) {
             if let Some(pin_data) = self.graph.pin(core_pin) {
                 ui.label(&pin_data.name);
@@ -507,13 +497,7 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         true
     }
 
-    fn show_graph_menu(
-        &mut self,
-        pos: Pos2,
-        ui: &mut Ui,
-        _scale: f32,
-        snarl: &mut Snarl<SnarlNode>,
-    ) {
+    fn show_graph_menu(&mut self, pos: Pos2, ui: &mut Ui, snarl: &mut Snarl<SnarlNode>) {
         ui.label("Add node");
         for kind in [
             BuiltinNodeKind::Box,
@@ -526,7 +510,7 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         ] {
             if ui.button(kind.name()).clicked() {
                 self.add_node(snarl, kind, pos);
-                ui.close_menu();
+                ui.close();
             }
         }
     }
@@ -541,7 +525,6 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         _inputs: &[egui_snarl::InPin],
         _outputs: &[egui_snarl::OutPin],
         ui: &mut Ui,
-        _scale: f32,
         snarl: &mut Snarl<SnarlNode>,
     ) {
         if ui.button("Delete node").clicked() {
@@ -555,7 +538,7 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
                 }
                 self.changed = true;
             }
-            ui.close_menu();
+            ui.close();
         }
     }
 
@@ -563,43 +546,22 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         &mut self,
         node: egui_snarl::NodeId,
         ui_rect: egui::Rect,
-        _graph_rect: egui::Rect,
         ui: &mut Ui,
-        _scale: f32,
         snarl: &mut Snarl<SnarlNode>,
     ) {
         let Some(core_id) = self.core_node_id(snarl, node) else {
             return;
         };
-        let graph_rect = _graph_rect;
-        let graph_size = graph_rect.size();
-        if graph_size.x > 0.0 && graph_size.y > 0.0 {
-            let scale_x = ui_rect.size().x / graph_size.x;
-            let scale_y = ui_rect.size().y / graph_size.y;
-            let scale = if scale_x.is_finite() && scale_y.is_finite() {
-                (scale_x + scale_y) * 0.5
-            } else {
-                1.0
-            };
-            if scale.is_finite() && scale > 0.0 {
-                let center = ui.max_rect().center();
-                let graph_pos = graph_rect.center().to_vec2();
-                let screen_pos = ui_rect.center().to_vec2();
-                let offset = graph_pos * scale + center.to_vec2() - screen_pos;
-                self.graph_transform.scale = scale;
-                self.graph_transform.offset = offset;
-                self.graph_transform.center = center;
-                self.graph_transform.valid = true;
-            }
-        }
         if self.selected_node.as_ref() == Some(&core_id) {
             let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(235, 200, 60));
-            ui.painter().rect_stroke(ui_rect, 6.0, stroke);
+            ui.painter()
+                .rect_stroke(ui_rect, 6.0, stroke, egui::StrokeKind::Inside);
         }
 
         if self.error_nodes.contains(&core_id) {
             let stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(220, 60, 60));
-            ui.painter().rect_stroke(ui_rect, 6.0, stroke);
+            ui.painter()
+                .rect_stroke(ui_rect, 6.0, stroke, egui::StrokeKind::Inside);
 
             let badge_center = egui::pos2(ui_rect.right() - 8.0, ui_rect.top() + 8.0);
             let badge_rect = egui::Rect::from_center_size(badge_center, egui::vec2(12.0, 12.0));
@@ -629,6 +591,17 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         );
         if response.clicked_by(egui::PointerButton::Primary) {
             *self.selected_node = Some(core_id);
+        }
+    }
+
+    fn current_transform(
+        &mut self,
+        to_global: &mut egui::emath::TSTransform,
+        _snarl: &mut Snarl<SnarlNode>,
+    ) {
+        if to_global.is_valid() {
+            self.graph_transform.to_global = *to_global;
+            self.graph_transform.valid = true;
         }
     }
 
