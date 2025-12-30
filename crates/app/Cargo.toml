@@ -1,0 +1,15 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+core = { path = "../core" }
+render = { path = "../render" }
+eframe = { version = "0.27", default-features = false, features = ["default_fonts", "wgpu"] }
+egui = "0.27"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+serde_json = "1"
+rfd = "0.14"
+serde = { version = "1", features = ["derive"] }

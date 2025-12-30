@@ -7,6 +7,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### A1. Create workspace + CI
 
 **Depends:** "
+**Status:** done
 
 * Create Cargo workspace: `core/`, `render/`, `app/` (+ optional `nodes_builtin/`)
 * Add basic CI: `cargo fmt`, `cargo clippy`, `cargo test`
@@ -18,12 +19,25 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### A2. Logging + error plumbing baseline
 
 **Depends:** A1
+**Status:** done
 
 * Add logging (`tracing` + `tracing-subscriber`)
 * Create app-level "Console" panel showing recent logs
   **Acceptance**
 * Logs visible in app Console panel
 * Log level adjustable (Info/Debug/Trace) at runtime (even if crude)
+
+### A3. Headless CLI mode (project build + validation)
+
+**Depends:** A1, E1
+**Status:** done
+
+* `--headless` mode that can build a project graph from a JSON plan
+* Optional `--save` to write a project JSON and `--print` to stdout
+* Optional validation using topo sort on a named output node
+  **Acceptance**
+* Runs without opening a GUI window
+* Can create a valid project JSON from a plan file
 
 ---
 
@@ -32,6 +46,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### B1. eframe app with split layout
 
 **Depends:** A1
+**Status:** done
 
 * Implement panels: Viewport, Node Graph, Inspector, Debug, Console
 * Split ratio between Viewport and Node Graph is configurable in settings (percentage)
@@ -43,6 +58,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### B2. Project load/save scaffold
 
 **Depends:** A1
+**Status:** done
 
 * Define `core::Project` (minimal)
 * Serialize with `serde` + JSON
@@ -55,9 +71,20 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 ## Epic C " Renderer baseline (display-only viewport)
 
+### C0. Viewport panel placeholder (egui-only)
+
+**Depends:** B1
+**Status:** done
+
+* Render a simple placeholder in the Viewport panel to validate layout and panel sizing
+  **Acceptance**
+* Viewport panel shows a clear placeholder area and title
+* Split ratio changes immediately affect the placeholder size
+
 ### C1. WGPU integration in Viewport panel
 
 **Depends:** B1
+**Status:** done
 
 * Initialize wgpu device/queue/surface
 * Render loop draws to a texture displayed in egui Viewport panel
@@ -68,6 +95,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### C2. Camera controls (orbit/pan/dolly)
 
 **Depends:** C1
+**Status:** in progress
 
 * Mouse: orbit (LMB), pan (MMB), dolly (wheel) (bindings adjustable)
 * Camera state in app settings
@@ -151,6 +179,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### E1. Graph data model
 
 **Depends:** A1
+**Status:** done
 
 * Types: `NodeId`, `PinId`, `LinkId`
 * Node definitions: inputs/outputs, parameter blob, UI metadata
@@ -162,6 +191,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### E2. Topological sort + cycle detection
 
 **Depends:** E1
+**Status:** done
 
 * Compute evaluation order for the active output node
 * Detect cycles and report errors
