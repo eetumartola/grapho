@@ -1,0 +1,12 @@
+#[derive(Debug, Clone)]
+pub struct RenderMesh {
+    pub positions: Vec<[f32; 3]>,
+    pub normals: Vec<[f32; 3]>,
+    pub indices: Vec<u32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RenderScene {
+    pub mesh: RenderMesh,
+    pub base_color: [f32; 3],
+}

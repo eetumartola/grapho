@@ -27,6 +27,16 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Logs visible in app Console panel
 * Log level adjustable (Info/Debug/Trace) at runtime (even if crude)
 
+### A4. Headless CLI examples + smoke check
+
+**Depends:** A3
+**Status:** pending
+
+* Add a sample `headless_plan.json` in repo root
+* Add a simple CI/local smoke step: `cargo run -- --headless --plan headless_plan.json`
+  **Acceptance**
+* Headless mode runs without GUI and exits 0
+
 ### A3. Headless CLI mode (project build + validation)
 
 **Depends:** A1, E1
@@ -91,10 +101,22 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
   **Acceptance**
 * Stable rendering at interactive framerates
 * Resizing viewport does not crash or smear; handles DPI scaling
+* Custom WGPU callback renders inside the Viewport panel region
 
 ### C2. Camera controls (orbit/pan/dolly)
 
 **Depends:** C1
+**Status:** in progress
+
+#### C2a. Input + settings (orbit/pan/dolly)
+
+**Status:** done
+
+* Mouse: orbit (LMB), pan (MMB), dolly (wheel) (bindings adjustable)
+* Camera state in app settings
+
+#### C2b. Apply camera to rendering
+
 **Status:** in progress
 
 * Mouse: orbit (LMB), pan (MMB), dolly (wheel) (bindings adjustable)
@@ -106,6 +128,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### C3. Simple lit shading pipeline
 
 **Depends:** C1
+**Status:** done
 
 * Lit shading: directional + ambient + simple spec (Blinn-Phong or GGX-lite)
 * Mesh with vertex normals renders with clear form (not unlit)
@@ -116,6 +139,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### C4. GPU mesh cache (upload/update)
 
 **Depends:** C3
+**Status:** in progress
 
 * A `GpuMeshCache` keyed by mesh ID/hash
 * Update GPU buffers only when mesh changes
@@ -130,6 +154,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### D1. Render debug overlays: grid + axes
 
 **Depends:** C1
+**Status:** done
 
 * Grid plane (toggle)
 * World axes (toggle)
@@ -140,6 +165,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### D2. Debug shading modes: Lit / Normals / Depth
 
 **Depends:** C3
+**Status:** done
 
 * Implement shader switch or pipeline switch:
 
@@ -153,6 +179,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### D3. Normal lines + bounds overlay
 
 **Depends:** C4
+**Status:** done
 
 * Optional line rendering pass:
 
@@ -165,6 +192,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### D4. Stats overlay + perf counters
 
 **Depends:** C1
+**Status:** done
 
 * On-screen overlay in viewport: FPS, tris/verts, mesh count, cache hits
 * Show last eval time once evaluation exists
@@ -202,6 +230,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### E3. Dirty propagation + caching
 
 **Depends:** E2
+**Status:** done
 
 * Per-node `param_version`
 * Input version tracking and downstream dirty marking
@@ -216,6 +245,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### E4. Eval report and error model
 
 **Depends:** E3
+**Status:** done
 
 * `EvalReport`: per-node timing, cache hit/miss, errors
 * Errors attach to node IDs for UI highlighting
@@ -230,6 +260,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### F1. Geometry kernel: `Mesh` and helpers
 
 **Depends:** A1
+**Status:** done
 
 * Mesh struct: positions, indices, normals, uvs (optional)
 * Helpers: compute normals, compute bounds, merge meshes, transform
@@ -239,6 +270,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### F2. Source nodes: Box / Grid / UV Sphere (pick 2 to start)
 
 **Depends:** F1, E1
+**Status:** done
 **Acceptance**
 
 * Each node generates valid indexed triangles
@@ -247,6 +279,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### F3. Transform node
 
 **Depends:** F1, E1
+**Status:** done
 
 * Translate/rotate/scale inputs or parameters
   **Acceptance**
@@ -255,6 +288,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### F4. Merge node
 
 **Depends:** F1, E1
+**Status:** done
 
 * Combine meshes into one
   **Acceptance**
@@ -272,6 +306,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### F6. Output node (final)
 
 **Depends:** E1
+**Status:** done
 
 * One designated graph output for v1
   **Acceptance**
@@ -327,6 +362,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### H1. SceneSnapshot boundary
 
 **Depends:** E4, F1, C4
+**Status:** done
 
 * Define `SceneSnapshot` (v1: one mesh + optional material params)
 * `core` produces snapshot + report
@@ -337,6 +373,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### H2. App orchestration: eval triggers + debounce
 
 **Depends:** H1, G2
+**Status:** in progress
 
 * Evaluate when graph changes or params change
 * Optional debounce for continuous slider drags

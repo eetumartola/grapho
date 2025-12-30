@@ -151,6 +151,13 @@ This is enough to read form well, without implementing full PBR + IBL.
 
 ---
 
+## Coordinate system (user-facing)
+
+* Match Houdini-style coordinates for all user-visible values and UI edits
+* Right-handed, Y up, Z depth; keep this consistent in camera controls and numeric fields
+
+---
+
 ## Debug display options (explicit scope)
 
 ### Render debug toggles (viewport)
