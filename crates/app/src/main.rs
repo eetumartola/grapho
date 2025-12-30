@@ -6,10 +6,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use core::{
-    default_params, evaluate_mesh_graph, node_definition, BuiltinNodeKind, MeshEvalState, NodeId,
-    ParamValue, Project, SceneSnapshot, ShadingMode,
-};
+use core::{evaluate_mesh_graph, MeshEvalState, NodeId, Project, SceneSnapshot, ShadingMode};
 use eframe::egui;
 use render::{
     CameraState, RenderMesh, RenderScene, ViewportDebug, ViewportRenderer, ViewportShadingMode,
@@ -22,6 +19,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::Layer;
 
 mod headless;
+mod node_graph;
 
 const MAX_LOG_LINES: usize = 500;
 
@@ -99,7 +97,7 @@ struct GraphoApp {
     last_eval_ms: Option<f32>,
     eval_dirty: bool,
     last_param_change: Option<Instant>,
-    demo_graph: Option<DemoGraphIds>,
+    node_graph: node_graph::NodeGraphState,
 }
 
 impl GraphoApp {
@@ -120,14 +118,14 @@ impl GraphoApp {
             last_eval_ms: None,
             eval_dirty: false,
             last_param_change: None,
-            demo_graph: None,
+            node_graph: node_graph::NodeGraphState::default(),
         }
     }
 
     fn new_project(&mut self) {
         self.project = Project::default();
         self.project_path = None;
-        self.demo_graph = None;
+        self.node_graph.reset();
         self.eval_dirty = true;
         tracing::info!("new project created");
     }
@@ -143,6 +141,8 @@ impl GraphoApp {
         let project: Project = serde_json::from_slice(&data)
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
         self.project = project;
+        self.node_graph.reset();
+        self.eval_dirty = true;
         Ok(())
     }
 
@@ -243,7 +243,12 @@ impl eframe::App for GraphoApp {
                         egui::CollapsingHeader::new("Inspector")
                             .default_open(true)
                             .show(ui, |ui| {
-                                ui.label("No selection.");
+                                if self
+                                    .node_graph
+                                    .show_inspector(ui, &mut self.project.graph)
+                                {
+                                    self.mark_eval_dirty();
+                                }
                             });
                     }
 
@@ -287,7 +292,7 @@ impl eframe::App for GraphoApp {
                                                     .normal_length,
                                             )
                                             .speed(0.02)
-                                            .clamp_range(0.01..=10.0),
+                                            .range(0.01..=10.0),
                                         );
                                     });
                                 }
@@ -332,7 +337,7 @@ impl eframe::App for GraphoApp {
                                                 &mut self.project.settings.render_debug.depth_near,
                                             )
                                             .speed(0.1)
-                                            .clamp_range(0.01..=1000.0),
+                                            .range(0.01..=1000.0),
                                         );
                                     });
                                     ui.horizontal(|ui| {
@@ -342,7 +347,7 @@ impl eframe::App for GraphoApp {
                                                 &mut self.project.settings.render_debug.depth_far,
                                             )
                                             .speed(0.1)
-                                            .clamp_range(0.01..=5000.0),
+                                            .range(0.01..=5000.0),
                                         );
                                     });
                                     let near = self.project.settings.render_debug.depth_near;
@@ -354,111 +359,14 @@ impl eframe::App for GraphoApp {
 
                                 ui.separator();
                                 ui.label("Evaluation");
-                                if self.demo_graph.is_none() {
-                                    if ui.button("Create demo graph").clicked() {
-                                        self.create_demo_graph();
-                                    }
+                                if ui.button("Create demo graph").clicked() {
+                                    self.node_graph.add_demo_graph(&mut self.project.graph);
+                                    self.mark_eval_dirty();
                                 }
-                                if let Some(ids) = self.demo_graph {
-                                    if let Some(node) = self.project.graph.node(ids.box_node) {
-                                        ui.label("Box");
-                                        let mut size =
-                                            get_vec3_param(node, "size", [1.0, 1.0, 1.0]);
-                                        let mut changed = false;
-                                        ui.horizontal(|ui| {
-                                            ui.label("Size");
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut size[0]).speed(0.1))
-                                                .changed();
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut size[1]).speed(0.1))
-                                                .changed();
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut size[2]).speed(0.1))
-                                                .changed();
-                                        });
-                                        if changed {
-                                            let _ = self.project.graph.set_param(
-                                                ids.box_node,
-                                                "size",
-                                                ParamValue::Vec3(size),
-                                            );
-                                            self.mark_eval_dirty();
-                                        }
-                                    }
-
-                                    if let Some(node) = self.project.graph.node(ids.transform_node)
-                                    {
-                                        ui.separator();
-                                        ui.label("Transform");
-                                        let mut translate =
-                                            get_vec3_param(node, "translate", [0.0, 0.0, 0.0]);
-                                        let mut rotate =
-                                            get_vec3_param(node, "rotate_deg", [0.0, 0.0, 0.0]);
-                                        let mut scale =
-                                            get_vec3_param(node, "scale", [1.0, 1.0, 1.0]);
-                                        let mut changed = false;
-                                        ui.horizontal(|ui| {
-                                            ui.label("Translate");
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut translate[0]))
-                                                .changed();
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut translate[1]))
-                                                .changed();
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut translate[2]))
-                                                .changed();
-                                        });
-                                        ui.horizontal(|ui| {
-                                            ui.label("Rotate");
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut rotate[0]))
-                                                .changed();
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut rotate[1]))
-                                                .changed();
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut rotate[2]))
-                                                .changed();
-                                        });
-                                        ui.horizontal(|ui| {
-                                            ui.label("Scale");
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut scale[0]).speed(0.1))
-                                                .changed();
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut scale[1]).speed(0.1))
-                                                .changed();
-                                            changed |= ui
-                                                .add(egui::DragValue::new(&mut scale[2]).speed(0.1))
-                                                .changed();
-                                        });
-                                        if changed {
-                                            let _ = self.project.graph.set_param(
-                                                ids.transform_node,
-                                                "translate",
-                                                ParamValue::Vec3(translate),
-                                            );
-                                            let _ = self.project.graph.set_param(
-                                                ids.transform_node,
-                                                "rotate_deg",
-                                                ParamValue::Vec3(rotate),
-                                            );
-                                            let _ = self.project.graph.set_param(
-                                                ids.transform_node,
-                                                "scale",
-                                                ParamValue::Vec3(scale),
-                                            );
-                                            self.mark_eval_dirty();
-                                        }
-                                    }
-
-                                    if ui.button("Recompute now").clicked() {
-                                        self.eval_dirty = false;
-                                        self.last_param_change = None;
-                                        self.evaluate_graph();
-                                    }
+                                if ui.button("Recompute now").clicked() {
+                                    self.eval_dirty = false;
+                                    self.last_param_change = None;
+                                    self.evaluate_graph();
                                 }
 
                                 if let Some(report) = &self.last_eval_report {
@@ -612,7 +520,8 @@ impl eframe::App for GraphoApp {
 
             ui.allocate_ui_at_rect(right_rect, |ui| {
                 ui.heading("Node Graph");
-                ui.label("egui-snarl graph placeholder.");
+                self.node_graph
+                    .show(ui, &mut self.project.graph, &mut self.eval_dirty);
             });
         });
 
@@ -664,7 +573,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "grapho",
         native_options,
-        Box::new(|_cc| Box::new(GraphoApp::new(console, log_level_state))),
+        Box::new(|_cc| Ok(Box::new(GraphoApp::new(console, log_level_state)))),
     )
 }
 
@@ -758,8 +667,8 @@ impl GraphoApp {
     }
 
     fn evaluate_graph(&mut self) {
-        let output_node = match self.demo_graph {
-            Some(ids) => ids.output_node,
+        let output_node = match self.find_output_node() {
+            Some(node) => node,
             None => return,
         };
 
@@ -784,52 +693,11 @@ impl GraphoApp {
         }
     }
 
-    fn create_demo_graph(&mut self) {
-        let graph = &mut self.project.graph;
-        let box_id = graph.add_node(node_definition(BuiltinNodeKind::Box));
-        let transform_id = graph.add_node(node_definition(BuiltinNodeKind::Transform));
-        let output_id = graph.add_node(node_definition(BuiltinNodeKind::Output));
-
-        let box_out = graph.node(box_id).unwrap().outputs[0];
-        let transform_in = graph.node(transform_id).unwrap().inputs[0];
-        let transform_out = graph.node(transform_id).unwrap().outputs[0];
-        let output_in = graph.node(output_id).unwrap().inputs[0];
-        let _ = graph.add_link(box_out, transform_in);
-        let _ = graph.add_link(transform_out, output_in);
-
-        apply_default_params(graph, box_id, BuiltinNodeKind::Box);
-        apply_default_params(graph, transform_id, BuiltinNodeKind::Transform);
-
-        self.demo_graph = Some(DemoGraphIds {
-            box_node: box_id,
-            transform_node: transform_id,
-            output_node: output_id,
-        });
-        self.mark_eval_dirty();
+    fn find_output_node(&self) -> Option<NodeId> {
+        self.project
+            .graph
+            .nodes()
+            .find(|node| node.name == "Output")
+            .map(|node| node.id)
     }
-}
-
-#[derive(Clone, Copy)]
-struct DemoGraphIds {
-    box_node: NodeId,
-    transform_node: NodeId,
-    output_node: NodeId,
-}
-
-fn apply_default_params(graph: &mut core::Graph, node_id: NodeId, kind: BuiltinNodeKind) {
-    let params = default_params(kind);
-    for (key, value) in params.values {
-        let _ = graph.set_param(node_id, key, value);
-    }
-}
-
-fn get_vec3_param(node: &core::Node, key: &str, default: [f32; 3]) -> [f32; 3] {
-    node.params
-        .values
-        .get(key)
-        .and_then(|value| match value {
-            ParamValue::Vec3(v) => Some(*v),
-            _ => None,
-        })
-        .unwrap_or(default)
 }

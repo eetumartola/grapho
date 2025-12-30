@@ -319,6 +319,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### G1. UI graph adapter (core + snarl)
 
 **Depends:** B1, E1
+**Status:** done
 
 * Adapter that renders nodes/pins based on core graph
 * Create/remove node operations via context menu
@@ -330,6 +331,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### G2. Node inspector
 
 **Depends:** G1
+**Status:** done
 
 * Inspector edits node parameters (sliders/fields)
 * Parameter edits bump `param_version` for dirty propagation
@@ -373,7 +375,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### H2. App orchestration: eval triggers + debounce
 
 **Depends:** H1, G2
-**Status:** in progress
+**Status:** done
 
 * Evaluate when graph changes or params change
 * Optional debounce for continuous slider drags

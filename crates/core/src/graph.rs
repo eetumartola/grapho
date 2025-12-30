@@ -148,6 +148,29 @@ impl Graph {
         self.links.remove(&link_id).is_some()
     }
 
+    pub fn links(&self) -> impl Iterator<Item = &Link> {
+        self.links.values()
+    }
+
+    pub fn remove_link_between(&mut self, from: PinId, to: PinId) -> bool {
+        let link_id = self.links.iter().find_map(|(id, link)| {
+            if link.from == from && link.to == to {
+                Some(*id)
+            } else {
+                None
+            }
+        });
+
+        link_id.map(|id| self.links.remove(&id)).is_some()
+    }
+
+    pub fn remove_links_for_pin(&mut self, pin_id: PinId) -> usize {
+        let before = self.links.len();
+        self.links
+            .retain(|_, link| link.from != pin_id && link.to != pin_id);
+        before - self.links.len()
+    }
+
     pub fn set_param(
         &mut self,
         node_id: NodeId,

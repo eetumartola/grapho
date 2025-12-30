@@ -347,6 +347,7 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 vertex: egui_wgpu::wgpu::VertexState {
                     module: &shader,
                     entry_point: "vs_main",
+                    compilation_options: Default::default(),
                     buffers: &[egui_wgpu::wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<Vertex>()
                             as egui_wgpu::wgpu::BufferAddress,
@@ -357,6 +358,7 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 fragment: Some(egui_wgpu::wgpu::FragmentState {
                     module: &shader,
                     entry_point: "fs_main",
+                    compilation_options: Default::default(),
                     targets: &[Some(egui_wgpu::wgpu::ColorTargetState {
                         format: target_format,
                         blend: Some(egui_wgpu::wgpu::BlendState::REPLACE),
@@ -385,6 +387,7 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 vertex: egui_wgpu::wgpu::VertexState {
                     module: &shader,
                     entry_point: "vs_line",
+                    compilation_options: Default::default(),
                     buffers: &[egui_wgpu::wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<LineVertex>()
                             as egui_wgpu::wgpu::BufferAddress,
@@ -395,6 +398,7 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 fragment: Some(egui_wgpu::wgpu::FragmentState {
                     module: &shader,
                     entry_point: "fs_line",
+                    compilation_options: Default::default(),
                     targets: &[Some(egui_wgpu::wgpu::ColorTargetState {
                         format: target_format,
                         blend: Some(egui_wgpu::wgpu::BlendState::REPLACE),
@@ -505,11 +509,13 @@ fn fs_blit(input: BlitOut) -> @location(0) vec4<f32> {
                 vertex: egui_wgpu::wgpu::VertexState {
                     module: &blit_shader,
                     entry_point: "vs_blit",
+                    compilation_options: Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(egui_wgpu::wgpu::FragmentState {
                     module: &blit_shader,
                     entry_point: "fs_blit",
+                    compilation_options: Default::default(),
                     targets: &[Some(egui_wgpu::wgpu::ColorTargetState {
                         format: target_format,
                         blend: Some(egui_wgpu::wgpu::BlendState::REPLACE),
