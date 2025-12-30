@@ -1,11 +1,11 @@
 {
   "version": 1,
   "settings": {
-    "viewport_split": 0.6,
+    "viewport_split": 0.5,
     "panels": {
       "show_inspector": true,
-      "show_debug": true,
-      "show_console": true
+      "show_debug": false,
+      "show_console": false
     },
     "camera": {
       "target": [

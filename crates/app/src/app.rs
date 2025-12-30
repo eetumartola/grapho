@@ -99,6 +99,7 @@ pub(crate) struct GraphoApp {
     node_graph: node_graph::NodeGraphState,
     last_output_state: OutputState,
     last_node_graph_rect: Option<egui::Rect>,
+    last_selected_node: Option<core::NodeId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -126,6 +127,7 @@ impl GraphoApp {
             node_graph: node_graph::NodeGraphState::default(),
             last_output_state: OutputState::Ok,
             last_node_graph_rect: None,
+            last_selected_node: None,
         }
     }
 
@@ -269,27 +271,11 @@ impl eframe::App for GraphoApp {
             });
         });
 
-        if self.project.settings.panels.show_inspector
-            || self.project.settings.panels.show_debug
-            || self.project.settings.panels.show_console
-        {
+        if self.project.settings.panels.show_debug || self.project.settings.panels.show_console {
             egui::SidePanel::right("side_panels")
                 .resizable(true)
                 .default_width(280.0)
                 .show(ctx, |ui| {
-                    if self.project.settings.panels.show_inspector {
-                        egui::CollapsingHeader::new("Parameters")
-                            .default_open(true)
-                            .show(ui, |ui| {
-                                if self
-                                    .node_graph
-                                    .show_inspector(ui, &mut self.project.graph)
-                                {
-                                    self.mark_eval_dirty();
-                                }
-                            });
-                    }
-
                     if self.project.settings.panels.show_debug {
                         egui::CollapsingHeader::new("Debug")
                             .default_open(true)
@@ -483,7 +469,6 @@ impl eframe::App for GraphoApp {
             let right_rect = egui::Rect::from_min_max(egui::pos2(split_x, rect.min.y), rect.max);
 
             ui.scope_builder(egui::UiBuilder::new().max_rect(left_rect), |ui| {
-                ui.heading("Viewport");
                 let available = ui.available_size();
                 let (rect, response) =
                     ui.allocate_exact_size(available, egui::Sense::click_and_drag());
@@ -556,8 +541,138 @@ impl eframe::App for GraphoApp {
                 }
             });
 
-            ui.scope_builder(egui::UiBuilder::new().max_rect(right_rect), |ui| {
-                ui.heading("Node Graph");
+            let mut params_height = 0.0;
+            let separator_height = 1.0;
+            let min_params = 140.0;
+            if self.project.settings.panels.show_inspector {
+                let selected = self.node_graph.selected_node_id();
+                let rows = self.node_graph.inspector_row_count(&self.project.graph);
+                let row_height = 36.0;
+                let header_height = 46.0;
+                let padding = 40.0;
+                let desired_height = header_height + rows as f32 * row_height + padding;
+                let max = right_rect.height() * 0.5;
+                let target = desired_height.clamp(min_params, max.max(min_params));
+                if selected != self.last_selected_node
+                    || (self.project.settings.node_params_split * right_rect.height()) < target
+                {
+                    let clamped = desired_height.clamp(min_params, max.max(min_params));
+                    self.project.settings.node_params_split =
+                        (clamped / right_rect.height()).clamp(0.1, 0.5);
+                    self.last_selected_node = selected;
+                }
+                params_height = (right_rect.height()
+                    * self.project.settings.node_params_split.clamp(0.1, 0.5))
+                .clamp(min_params, right_rect.height() * 0.5);
+            }
+            let params_ratio = if params_height > 0.0 { 1.0 } else { 0.0 };
+            let params_rect = if params_ratio > 0.0 {
+                egui::Rect::from_min_size(
+                    right_rect.min,
+                    egui::vec2(right_rect.width(), params_height),
+                )
+            } else {
+                egui::Rect::from_min_size(right_rect.min, egui::vec2(right_rect.width(), 0.0))
+            };
+            let separator_rect = if params_ratio > 0.0 {
+                egui::Rect::from_min_size(
+                    egui::pos2(right_rect.min.x, params_rect.max.y),
+                    egui::vec2(right_rect.width(), separator_height),
+                )
+            } else {
+                egui::Rect::from_min_size(right_rect.min, egui::vec2(0.0, 0.0))
+            };
+            let graph_rect = if params_ratio > 0.0 {
+                egui::Rect::from_min_max(
+                    egui::pos2(right_rect.min.x, separator_rect.max.y),
+                    right_rect.max,
+                )
+            } else {
+                right_rect
+            };
+
+            if params_ratio > 0.0 {
+                let sep_response = ui.interact(
+                    separator_rect,
+                    ui.make_persistent_id("node_split"),
+                    egui::Sense::drag(),
+                );
+                if sep_response.dragged() {
+                    if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                        let local =
+                            (pos.y - right_rect.min.y).clamp(min_params, right_rect.height() * 0.5);
+                        self.project.settings.node_params_split =
+                            (local / right_rect.height()).clamp(0.1, 0.5);
+                    }
+                }
+                let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(70, 70, 70));
+                ui.painter().line_segment(
+                    [
+                        egui::pos2(separator_rect.left(), separator_rect.center().y),
+                        egui::pos2(separator_rect.right(), separator_rect.center().y),
+                    ],
+                    stroke,
+                );
+            }
+
+            if params_ratio > 0.0 {
+                ui.scope_builder(egui::UiBuilder::new().max_rect(params_rect), |ui| {
+                    let frame = egui::Frame::NONE
+                        .fill(egui::Color32::from_rgb(55, 55, 55))
+                        .inner_margin(egui::Margin::symmetric(16, 12));
+                    frame.show(ui, |ui| {
+                        let style = ui.style_mut();
+                        style.visuals = egui::Visuals::dark();
+                        let text_color = egui::Color32::from_rgb(230, 230, 230);
+                        style.visuals.override_text_color = Some(text_color);
+                        style.visuals.widgets.inactive.fg_stroke.color = text_color;
+                        style.visuals.widgets.hovered.fg_stroke.color = text_color;
+                        style.visuals.widgets.active.fg_stroke.color = text_color;
+                        style.visuals.widgets.inactive.bg_fill =
+                            egui::Color32::from_rgb(60, 60, 60);
+                        style.visuals.widgets.hovered.bg_fill =
+                            egui::Color32::from_rgb(75, 75, 75);
+                        style.visuals.widgets.active.bg_fill =
+                            egui::Color32::from_rgb(90, 90, 90);
+                        style.visuals.widgets.inactive.bg_stroke.color =
+                            egui::Color32::from_rgb(85, 85, 85);
+                        style.visuals.widgets.hovered.bg_stroke.color =
+                            egui::Color32::from_rgb(105, 105, 105);
+                        style.visuals.widgets.active.bg_stroke.color =
+                            egui::Color32::from_rgb(125, 125, 125);
+                        style.visuals.extreme_bg_color = egui::Color32::from_rgb(45, 45, 45);
+                        style.visuals.faint_bg_color = egui::Color32::from_rgb(55, 55, 55);
+                        style.text_styles.insert(
+                            egui::TextStyle::Body,
+                            egui::FontId::proportional(16.0),
+                        );
+                        style.text_styles.insert(
+                            egui::TextStyle::Button,
+                            egui::FontId::proportional(16.0),
+                        );
+                        style.text_styles.insert(
+                            egui::TextStyle::Heading,
+                            egui::FontId::proportional(18.0),
+                        );
+                        style.spacing.item_spacing = egui::vec2(10.0, 8.0);
+                        style.spacing.interact_size = egui::vec2(44.0, 26.0);
+
+                        let max_height = ui.available_height();
+                        egui::ScrollArea::vertical()
+                            .max_height(max_height)
+                            .show(ui, |ui| {
+                                if self
+                                    .node_graph
+                                    .show_inspector(ui, &mut self.project.graph)
+                                {
+                                    self.mark_eval_dirty();
+                                }
+                            });
+                    });
+                });
+            }
+
+            ui.scope_builder(egui::UiBuilder::new().max_rect(graph_rect), |ui| {
                 self.node_graph
                     .show(ui, &mut self.project.graph, &mut self.eval_dirty);
             });

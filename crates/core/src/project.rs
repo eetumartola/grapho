@@ -25,6 +25,7 @@ impl Default for Project {
 #[serde(default)]
 pub struct ProjectSettings {
     pub viewport_split: f32,
+    pub node_params_split: f32,
     pub panels: PanelSettings,
     pub camera: CameraSettings,
     pub render_debug: RenderDebugSettings,
@@ -33,7 +34,8 @@ pub struct ProjectSettings {
 impl Default for ProjectSettings {
     fn default() -> Self {
         Self {
-            viewport_split: 0.6,
+            viewport_split: 0.5,
+            node_params_split: 0.25,
             panels: PanelSettings::default(),
             camera: CameraSettings::default(),
             render_debug: RenderDebugSettings::default(),
@@ -52,8 +54,8 @@ impl Default for PanelSettings {
     fn default() -> Self {
         Self {
             show_inspector: true,
-            show_debug: true,
-            show_console: true,
+            show_debug: false,
+            show_console: false,
         }
     }
 }
