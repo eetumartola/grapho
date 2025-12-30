@@ -1,0 +1,212 @@
+{
+  "version": 1,
+  "settings": {
+    "viewport_split": 0.6,
+    "panels": {
+      "show_inspector": true,
+      "show_debug": true,
+      "show_console": true
+    },
+    "camera": {
+      "target": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "distance": 5.0,
+      "yaw": -2.9999998,
+      "pitch": 0.14999992
+    },
+    "render_debug": {
+      "show_grid": true,
+      "show_axes": true,
+      "show_normals": false,
+      "show_bounds": false,
+      "normal_length": 0.3,
+      "show_stats": true,
+      "shading_mode": "lit",
+      "depth_near": 0.5,
+      "depth_far": 20.0
+    }
+  },
+  "graph": {
+    "nodes": {
+      "1": {
+        "id": 1,
+        "name": "Box",
+        "category": "Sources",
+        "inputs": [],
+        "outputs": [
+          1
+        ],
+        "params": {
+          "values": {
+            "center": {
+              "Vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "size": {
+              "Vec3": [
+                0.1,
+                0.2,
+                0.1
+              ]
+            }
+          }
+        },
+        "param_version": 5
+      },
+      "2": {
+        "id": 2,
+        "name": "Sphere",
+        "category": "Sources",
+        "inputs": [],
+        "outputs": [
+          2
+        ],
+        "params": {
+          "values": {
+            "center": {
+              "Vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "cols": {
+              "Int": 16
+            },
+            "radius": {
+              "Float": 1.0
+            },
+            "rows": {
+              "Int": 16
+            }
+          }
+        },
+        "param_version": 6
+      },
+      "3": {
+        "id": 3,
+        "name": "Copy to Points",
+        "category": "Operators",
+        "inputs": [
+          3,
+          4
+        ],
+        "outputs": [
+          5
+        ],
+        "params": {
+          "values": {
+            "align_to_normals": {
+              "Bool": true
+            },
+            "rotate_deg": {
+              "Vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "scale": {
+              "Vec3": [
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "translate": {
+              "Vec3": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "param_version": 4
+      },
+      "4": {
+        "id": 4,
+        "name": "Output",
+        "category": "Outputs",
+        "inputs": [
+          6
+        ],
+        "outputs": [],
+        "params": {
+          "values": {}
+        },
+        "param_version": 0
+      }
+    },
+    "pins": {
+      "1": {
+        "id": 1,
+        "node": 1,
+        "name": "out",
+        "kind": "Output",
+        "pin_type": "Mesh"
+      },
+      "2": {
+        "id": 2,
+        "node": 2,
+        "name": "out",
+        "kind": "Output",
+        "pin_type": "Mesh"
+      },
+      "3": {
+        "id": 3,
+        "node": 3,
+        "name": "source",
+        "kind": "Input",
+        "pin_type": "Mesh"
+      },
+      "4": {
+        "id": 4,
+        "node": 3,
+        "name": "template",
+        "kind": "Input",
+        "pin_type": "Mesh"
+      },
+      "5": {
+        "id": 5,
+        "node": 3,
+        "name": "out",
+        "kind": "Output",
+        "pin_type": "Mesh"
+      },
+      "6": {
+        "id": 6,
+        "node": 4,
+        "name": "in",
+        "kind": "Input",
+        "pin_type": "Mesh"
+      }
+    },
+    "links": {
+      "1": {
+        "id": 1,
+        "from": 1,
+        "to": 3
+      },
+      "2": {
+        "id": 2,
+        "from": 2,
+        "to": 4
+      },
+      "3": {
+        "id": 3,
+        "from": 5,
+        "to": 6
+      }
+    },
+    "next_node_id": 5,
+    "next_pin_id": 7,
+    "next_link_id": 4
+  }
+}

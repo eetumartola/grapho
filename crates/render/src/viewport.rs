@@ -121,6 +121,13 @@ impl ViewportRenderer {
             state.scene = Some(scene);
         }
     }
+
+    pub fn clear_scene(&self) {
+        if let Ok(mut state) = self.scene.lock() {
+            state.version = state.version.wrapping_add(1);
+            state.scene = None;
+        }
+    }
 }
 
 #[repr(C)]
@@ -658,11 +665,22 @@ impl CallbackTrait for ViewportCallback {
             ensure_offscreen_targets(device, pipeline, self.target_format, width, height);
 
             if let Ok(scene_state) = self.scene.lock() {
-                if let Some(scene) = scene_state.scene.clone() {
-                    if scene_state.version != pipeline.scene_version {
-                        apply_scene_to_pipeline(device, pipeline, &scene);
-                        pipeline.scene_version = scene_state.version;
-                        pipeline.base_color = scene.base_color;
+                match scene_state.scene.clone() {
+                    Some(scene) => {
+                        if scene_state.version != pipeline.scene_version {
+                            apply_scene_to_pipeline(device, pipeline, &scene);
+                            pipeline.scene_version = scene_state.version;
+                            pipeline.base_color = scene.base_color;
+                        }
+                    }
+                    None => {
+                        if scene_state.version != pipeline.scene_version {
+                            pipeline.mesh_vertices.clear();
+                            pipeline.index_count = 0;
+                            pipeline.mesh_bounds = ([0.0; 3], [0.0; 3]);
+                            pipeline.base_color = [0.7, 0.72, 0.75];
+                            pipeline.scene_version = scene_state.version;
+                        }
                     }
                 }
             }
@@ -727,38 +745,43 @@ impl CallbackTrait for ViewportCallback {
                 stats_state.stats.triangle_count = pipeline.index_count / 3;
             }
 
-            if let Some(mesh) = pipeline.mesh_cache.get(pipeline.mesh_id) {
-                let mut render_pass =
-                    _egui_encoder.begin_render_pass(&egui_wgpu::wgpu::RenderPassDescriptor {
-                        label: Some("grapho_viewport_offscreen"),
-                        color_attachments: &[Some(egui_wgpu::wgpu::RenderPassColorAttachment {
-                            view: &pipeline.offscreen_view,
-                            resolve_target: None,
-                            ops: egui_wgpu::wgpu::Operations {
-                                load: egui_wgpu::wgpu::LoadOp::Clear(egui_wgpu::wgpu::Color {
-                                    r: 28.0 / 255.0,
-                                    g: 28.0 / 255.0,
-                                    b: 28.0 / 255.0,
-                                    a: 1.0,
-                                }),
+            let mesh = if pipeline.index_count > 0 {
+                pipeline.mesh_cache.get(pipeline.mesh_id)
+            } else {
+                None
+            };
+            let mut render_pass =
+                _egui_encoder.begin_render_pass(&egui_wgpu::wgpu::RenderPassDescriptor {
+                    label: Some("grapho_viewport_offscreen"),
+                    color_attachments: &[Some(egui_wgpu::wgpu::RenderPassColorAttachment {
+                        view: &pipeline.offscreen_view,
+                        resolve_target: None,
+                        ops: egui_wgpu::wgpu::Operations {
+                            load: egui_wgpu::wgpu::LoadOp::Clear(egui_wgpu::wgpu::Color {
+                                r: 28.0 / 255.0,
+                                g: 28.0 / 255.0,
+                                b: 28.0 / 255.0,
+                                a: 1.0,
+                            }),
+                            store: egui_wgpu::wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(
+                        egui_wgpu::wgpu::RenderPassDepthStencilAttachment {
+                            view: &pipeline.depth_view,
+                            depth_ops: Some(egui_wgpu::wgpu::Operations {
+                                load: egui_wgpu::wgpu::LoadOp::Clear(1.0),
                                 store: egui_wgpu::wgpu::StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: Some(
-                            egui_wgpu::wgpu::RenderPassDepthStencilAttachment {
-                                view: &pipeline.depth_view,
-                                depth_ops: Some(egui_wgpu::wgpu::Operations {
-                                    load: egui_wgpu::wgpu::LoadOp::Clear(1.0),
-                                    store: egui_wgpu::wgpu::StoreOp::Store,
-                                }),
-                                stencil_ops: None,
-                            },
-                        ),
-                        occlusion_query_set: None,
-                        timestamp_writes: None,
-                    });
+                            }),
+                            stencil_ops: None,
+                        },
+                    ),
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
 
-                render_pass.set_viewport(0.0, 0.0, width as f32, height as f32, 0.0, 1.0);
+            render_pass.set_viewport(0.0, 0.0, width as f32, height as f32, 0.0, 1.0);
+            if let Some(mesh) = mesh {
                 render_pass.set_pipeline(&pipeline.mesh_pipeline);
                 render_pass.set_bind_group(0, &pipeline.uniform_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
@@ -767,29 +790,29 @@ impl CallbackTrait for ViewportCallback {
                     egui_wgpu::wgpu::IndexFormat::Uint32,
                 );
                 render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+            }
 
-                render_pass.set_pipeline(&pipeline.line_pipeline);
-                render_pass.set_bind_group(0, &pipeline.uniform_bind_group, &[]);
+            render_pass.set_pipeline(&pipeline.line_pipeline);
+            render_pass.set_bind_group(0, &pipeline.uniform_bind_group, &[]);
 
-                if self.debug.show_grid && pipeline.grid_count > 0 {
-                    render_pass.set_vertex_buffer(0, pipeline.grid_buffer.slice(..));
-                    render_pass.draw(0..pipeline.grid_count, 0..1);
-                }
+            if self.debug.show_grid && pipeline.grid_count > 0 {
+                render_pass.set_vertex_buffer(0, pipeline.grid_buffer.slice(..));
+                render_pass.draw(0..pipeline.grid_count, 0..1);
+            }
 
-                if self.debug.show_axes && pipeline.axes_count > 0 {
-                    render_pass.set_vertex_buffer(0, pipeline.axes_buffer.slice(..));
-                    render_pass.draw(0..pipeline.axes_count, 0..1);
-                }
+            if self.debug.show_axes && pipeline.axes_count > 0 {
+                render_pass.set_vertex_buffer(0, pipeline.axes_buffer.slice(..));
+                render_pass.draw(0..pipeline.axes_count, 0..1);
+            }
 
-                if self.debug.show_normals && pipeline.normals_count > 0 {
-                    render_pass.set_vertex_buffer(0, pipeline.normals_buffer.slice(..));
-                    render_pass.draw(0..pipeline.normals_count, 0..1);
-                }
+            if self.debug.show_normals && pipeline.normals_count > 0 {
+                render_pass.set_vertex_buffer(0, pipeline.normals_buffer.slice(..));
+                render_pass.draw(0..pipeline.normals_count, 0..1);
+            }
 
-                if self.debug.show_bounds && pipeline.bounds_count > 0 {
-                    render_pass.set_vertex_buffer(0, pipeline.bounds_buffer.slice(..));
-                    render_pass.draw(0..pipeline.bounds_count, 0..1);
-                }
+            if self.debug.show_bounds && pipeline.bounds_count > 0 {
+                render_pass.set_vertex_buffer(0, pipeline.bounds_buffer.slice(..));
+                render_pass.draw(0..pipeline.bounds_count, 0..1);
             }
         }
 

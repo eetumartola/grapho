@@ -125,6 +125,10 @@ impl Graph {
             return Err(GraphError::WrongPinDirection { from, to });
         }
 
+        if self.links.values().any(|link| link.to == to) {
+            return Err(GraphError::InputAlreadyConnected { to });
+        }
+
         if from_pin.pin_type != to_pin.pin_type {
             return Err(GraphError::IncompatiblePinTypes {
                 from: from_pin.pin_type,
@@ -367,6 +371,7 @@ pub enum GraphError {
     MissingNode(NodeId),
     MissingPin(PinId),
     WrongPinDirection { from: PinId, to: PinId },
+    InputAlreadyConnected { to: PinId },
     IncompatiblePinTypes { from: PinType, to: PinType },
     CycleDetected(Vec<NodeId>),
 }

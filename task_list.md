@@ -275,6 +275,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 * Each node generates valid indexed triangles
 * Normals correct or generated downstream
+* Sphere node available with basic parameters
 
 ### F3. Transform node
 
@@ -293,6 +294,17 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Combine meshes into one
   **Acceptance**
 * Output mesh is valid; indices correct; bounds correct
+
+### F7. Copy to Points node (basic)
+
+**Depends:** F1, E1
+**Status:** done
+
+* Copy a source mesh onto template points
+* Optional align-to-normal toggle
+  **Acceptance**
+* Copies appear at each template point
+* Align-to-normal changes orientation predictably
 
 ### F5. Subdivide node (simple)
 

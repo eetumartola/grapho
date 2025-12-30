@@ -96,7 +96,7 @@ where
         let mut upstream_versions = Vec::with_capacity(upstream.len());
         for upstream_id in &upstream {
             let upstream_state = state.node_state_mut(*upstream_id);
-            upstream_versions.push(upstream_state.output_version);
+            upstream_versions.push((*upstream_id, upstream_state.output_version));
         }
 
         let signature = hash_signature(node.param_version, &upstream_versions);
@@ -171,7 +171,7 @@ where
     Ok(report)
 }
 
-fn hash_signature(param_version: u64, upstream_versions: &[u64]) -> u64 {
+fn hash_signature(param_version: u64, upstream_versions: &[(NodeId, u64)]) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     param_version.hash(&mut hasher);
     upstream_versions.hash(&mut hasher);

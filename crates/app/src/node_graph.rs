@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use egui::{Color32, Pos2, Ui};
-use egui_snarl::ui::{PinInfo, SnarlStyle, SnarlViewer};
+use egui::{vec2, Color32, Frame, Pos2, Stroke, Ui};
+use egui_snarl::ui::{BackgroundPattern, PinInfo, SnarlStyle, SnarlViewer};
 use egui_snarl::{InPinId, OutPinId, Snarl};
 
 use core::{
@@ -21,6 +21,20 @@ pub struct NodeGraphState {
     next_pos: Pos2,
     needs_wire_sync: bool,
     selected_node: Option<NodeId>,
+    add_menu_open: bool,
+    add_menu_screen_pos: Pos2,
+    add_menu_graph_pos: Pos2,
+    graph_transform: GraphTransformState,
+    error_nodes: HashSet<NodeId>,
+    error_messages: HashMap<NodeId, String>,
+}
+
+#[derive(Clone, Copy)]
+struct GraphTransformState {
+    scale: f32,
+    offset: egui::Vec2,
+    center: Pos2,
+    valid: bool,
 }
 
 impl Default for NodeGraphState {
@@ -32,6 +46,17 @@ impl Default for NodeGraphState {
             next_pos: Pos2::new(0.0, 0.0),
             needs_wire_sync: true,
             selected_node: None,
+            add_menu_open: false,
+            add_menu_screen_pos: Pos2::new(0.0, 0.0),
+            add_menu_graph_pos: Pos2::new(0.0, 0.0),
+            graph_transform: GraphTransformState {
+                scale: 1.0,
+                offset: egui::Vec2::ZERO,
+                center: Pos2::new(0.0, 0.0),
+                valid: false,
+            },
+            error_nodes: HashSet::new(),
+            error_messages: HashMap::new(),
         }
     }
 }
@@ -54,14 +79,40 @@ impl NodeGraphState {
             snarl_to_core: &mut self.snarl_to_core,
             next_pos: &mut self.next_pos,
             selected_node: &mut self.selected_node,
+            graph_transform: &mut self.graph_transform,
+            error_nodes: &self.error_nodes,
+            error_messages: &self.error_messages,
             changed: false,
         };
-        let style = SnarlStyle::default();
+        let style = SnarlStyle {
+            pin_size: Some(10.0),
+            bg_frame: Some(Frame::none().fill(Color32::from_rgb(18, 18, 18))),
+            bg_pattern: Some(BackgroundPattern::grid(vec2(64.0, 64.0), 0.0)),
+            bg_pattern_stroke: Some(Stroke::new(1.0, Color32::from_rgb(26, 26, 26))),
+            ..SnarlStyle::default()
+        };
         self.snarl.show(&mut viewer, &style, "node_graph", ui);
 
         if viewer.changed {
             *eval_dirty = true;
             self.needs_wire_sync = true;
+        }
+
+        if self.add_menu_open {
+            self.show_add_menu(ui, graph);
+        }
+    }
+
+    pub fn open_add_menu(&mut self, pos: Pos2) {
+        self.add_menu_open = true;
+        self.add_menu_screen_pos = pos;
+        if self.graph_transform.valid {
+            let graph_pos =
+                (pos.to_vec2() + self.graph_transform.offset - self.graph_transform.center.to_vec2())
+                    / self.graph_transform.scale;
+            self.add_menu_graph_pos = graph_pos.to_pos2();
+        } else {
+            self.add_menu_graph_pos = self.next_pos;
         }
     }
 
@@ -250,6 +301,82 @@ impl NodeGraphState {
 
         changed
     }
+
+    pub fn set_error_state(
+        &mut self,
+        nodes: HashSet<NodeId>,
+        messages: HashMap<NodeId, String>,
+    ) {
+        self.error_nodes = nodes;
+        self.error_messages = messages;
+    }
+
+    fn show_add_menu(&mut self, ui: &mut Ui, graph: &mut Graph) {
+        let mut close_menu = ui.input(|i| i.key_pressed(egui::Key::Escape));
+        let mut menu_rect = None;
+
+        let response = egui::Window::new("add_node_menu")
+            .title_bar(false)
+            .resizable(false)
+            .collapsible(false)
+            .anchor(egui::Align2::LEFT_TOP, self.add_menu_screen_pos.to_vec2())
+            .frame(Frame::popup(ui.style()))
+            .show(ui.ctx(), |ui| {
+                ui.label("Add node");
+                for kind in [
+                    BuiltinNodeKind::Box,
+                    BuiltinNodeKind::Grid,
+                    BuiltinNodeKind::Sphere,
+                    BuiltinNodeKind::Transform,
+                    BuiltinNodeKind::Merge,
+                    BuiltinNodeKind::CopyToPoints,
+                    BuiltinNodeKind::Output,
+                ] {
+                    if ui.button(kind.name()).clicked() {
+                        self.try_add_node(graph, kind, self.add_menu_graph_pos);
+                        close_menu = true;
+                    }
+                }
+            });
+
+        if let Some(inner) = response {
+            menu_rect = Some(inner.response.rect);
+        }
+
+        if !close_menu {
+            if let Some(rect) = menu_rect {
+                if ui.input(|i| i.pointer.any_pressed()) {
+                    let hover = ui.input(|i| i.pointer.hover_pos());
+                    if hover.map_or(true, |pos| !rect.contains(pos)) {
+                        close_menu = true;
+                    }
+                }
+            }
+        }
+
+        if close_menu {
+            self.add_menu_open = false;
+        }
+    }
+
+    fn try_add_node(&mut self, graph: &mut Graph, kind: BuiltinNodeKind, pos: Pos2) {
+        if kind == BuiltinNodeKind::Output
+            && graph.nodes().any(|node| node.name == "Output")
+        {
+            tracing::warn!("Only one Output node is supported right now.");
+            return;
+        }
+
+        let _ = add_builtin_node(
+            graph,
+            &mut self.snarl,
+            &mut self.core_to_snarl,
+            &mut self.snarl_to_core,
+            kind,
+            pos,
+        );
+        self.needs_wire_sync = true;
+    }
 }
 
 struct NodeGraphViewer<'a> {
@@ -258,6 +385,9 @@ struct NodeGraphViewer<'a> {
     snarl_to_core: &'a mut HashMap<egui_snarl::NodeId, NodeId>,
     next_pos: &'a mut Pos2,
     selected_node: &'a mut Option<NodeId>,
+    graph_transform: &'a mut GraphTransformState,
+    error_nodes: &'a HashSet<NodeId>,
+    error_messages: &'a HashMap<NodeId, String>,
     changed: bool,
 }
 
@@ -283,6 +413,13 @@ impl<'a> NodeGraphViewer<'a> {
     }
 
     fn add_node(&mut self, snarl: &mut Snarl<SnarlNode>, kind: BuiltinNodeKind, pos: Pos2) {
+        if kind == BuiltinNodeKind::Output
+            && self.graph.nodes().any(|node| node.name == "Output")
+        {
+            tracing::warn!("Only one Output node is supported right now.");
+            return;
+        }
+
         let core_id = self.graph.add_node(node_definition(kind));
         let params = default_params(kind);
         for (key, value) in params.values {
@@ -315,16 +452,7 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         snarl: &mut Snarl<SnarlNode>,
     ) {
         let title = self.title(&snarl[node]);
-        let core_id = self.core_node_id(snarl, node);
-        let selected = core_id.map_or(false, |id| {
-            self.selected_node
-                .as_ref()
-                .map_or(false, |selected| *selected == id)
-        });
-        let response = ui.selectable_label(selected, title);
-        if response.clicked() {
-            *self.selected_node = core_id;
-        }
+        ui.label(title);
     }
 
     fn inputs(&mut self, node: &SnarlNode) -> usize {
@@ -390,8 +518,10 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         for kind in [
             BuiltinNodeKind::Box,
             BuiltinNodeKind::Grid,
+            BuiltinNodeKind::Sphere,
             BuiltinNodeKind::Transform,
             BuiltinNodeKind::Merge,
+            BuiltinNodeKind::CopyToPoints,
             BuiltinNodeKind::Output,
         ] {
             if ui.button(kind.name()).clicked() {
@@ -420,9 +550,85 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
                 self.core_to_snarl.remove(&core_id);
                 self.snarl_to_core.remove(&node);
                 let _ = snarl.remove_node(node);
+                if self.selected_node.as_ref() == Some(&core_id) {
+                    *self.selected_node = None;
+                }
                 self.changed = true;
             }
             ui.close_menu();
+        }
+    }
+
+    fn final_node_rect(
+        &mut self,
+        node: egui_snarl::NodeId,
+        ui_rect: egui::Rect,
+        _graph_rect: egui::Rect,
+        ui: &mut Ui,
+        _scale: f32,
+        snarl: &mut Snarl<SnarlNode>,
+    ) {
+        let Some(core_id) = self.core_node_id(snarl, node) else {
+            return;
+        };
+        let graph_rect = _graph_rect;
+        let graph_size = graph_rect.size();
+        if graph_size.x > 0.0 && graph_size.y > 0.0 {
+            let scale_x = ui_rect.size().x / graph_size.x;
+            let scale_y = ui_rect.size().y / graph_size.y;
+            let scale = if scale_x.is_finite() && scale_y.is_finite() {
+                (scale_x + scale_y) * 0.5
+            } else {
+                1.0
+            };
+            if scale.is_finite() && scale > 0.0 {
+                let center = ui.max_rect().center();
+                let graph_pos = graph_rect.center().to_vec2();
+                let screen_pos = ui_rect.center().to_vec2();
+                let offset = graph_pos * scale + center.to_vec2() - screen_pos;
+                self.graph_transform.scale = scale;
+                self.graph_transform.offset = offset;
+                self.graph_transform.center = center;
+                self.graph_transform.valid = true;
+            }
+        }
+        if self.selected_node.as_ref() == Some(&core_id) {
+            let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(235, 200, 60));
+            ui.painter().rect_stroke(ui_rect, 6.0, stroke);
+        }
+
+        if self.error_nodes.contains(&core_id) {
+            let stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(220, 60, 60));
+            ui.painter().rect_stroke(ui_rect, 6.0, stroke);
+
+            let badge_center = egui::pos2(ui_rect.right() - 8.0, ui_rect.top() + 8.0);
+            let badge_rect = egui::Rect::from_center_size(badge_center, egui::vec2(12.0, 12.0));
+            ui.painter()
+                .circle_filled(badge_center, 5.0, egui::Color32::from_rgb(220, 60, 60));
+            ui.painter().text(
+                badge_center,
+                egui::Align2::CENTER_CENTER,
+                "!",
+                egui::FontId::proportional(10.0),
+                egui::Color32::WHITE,
+            );
+            let badge_response = ui.interact(
+                badge_rect,
+                ui.make_persistent_id(("node-error", node)),
+                egui::Sense::hover(),
+            );
+            if let Some(message) = self.error_messages.get(&core_id) {
+                badge_response.on_hover_text(message);
+            }
+        }
+
+        let response = ui.interact(
+            ui_rect,
+            ui.make_persistent_id(("node-select", node)),
+            egui::Sense::click(),
+        );
+        if response.clicked_by(egui::PointerButton::Primary) {
+            *self.selected_node = Some(core_id);
         }
     }
 
@@ -443,6 +649,14 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
             Ok(_) => {
                 let _ = snarl.connect(from.id, to.id);
                 self.changed = true;
+            }
+            Err(core::GraphError::InputAlreadyConnected { .. }) => {
+                let _ = self.graph.remove_links_for_pin(to_pin);
+                snarl.drop_inputs(to.id);
+                if self.graph.add_link(from_pin, to_pin).is_ok() {
+                    let _ = snarl.connect(from.id, to.id);
+                    self.changed = true;
+                }
             }
             Err(err) => {
                 tracing::warn!("link rejected: {:?}", err);

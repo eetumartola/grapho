@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process;
@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use core::{evaluate_mesh_graph, MeshEvalState, NodeId, Project, SceneSnapshot, ShadingMode};
+use core::{evaluate_mesh_graph, MeshEvalState, Project, SceneSnapshot, ShadingMode};
 use eframe::egui;
 use render::{
     CameraState, RenderMesh, RenderScene, ViewportDebug, ViewportRenderer, ViewportShadingMode,
@@ -22,6 +22,7 @@ mod headless;
 mod node_graph;
 
 const MAX_LOG_LINES: usize = 500;
+const DEFAULT_GRAPH_PATH: &str = "graphs/default.json";
 
 #[derive(Clone)]
 struct ConsoleBuffer {
@@ -98,13 +99,19 @@ struct GraphoApp {
     eval_dirty: bool,
     last_param_change: Option<Instant>,
     node_graph: node_graph::NodeGraphState,
+    last_output_state: OutputState,
+    last_node_graph_rect: Option<egui::Rect>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OutputState {
+    Ok,
+    Missing,
+    Multiple,
 }
 
 impl GraphoApp {
     fn new(console: ConsoleBuffer, log_level_state: Arc<AtomicU8>) -> Self {
-        let mut box_mesh = core::make_box([1.0, 1.0, 1.0]);
-        box_mesh.compute_normals();
-        let snapshot = SceneSnapshot::from_mesh(&box_mesh, [0.7, 0.72, 0.75]);
         Self {
             project: Project::default(),
             project_path: None,
@@ -112,13 +119,15 @@ impl GraphoApp {
             log_level: LevelFilter::INFO,
             log_level_state,
             viewport_renderer: None,
-            pending_scene: Some(scene_to_render(&snapshot)),
+            pending_scene: None,
             eval_state: MeshEvalState::new(),
             last_eval_report: None,
             last_eval_ms: None,
             eval_dirty: false,
             last_param_change: None,
             node_graph: node_graph::NodeGraphState::default(),
+            last_output_state: OutputState::Ok,
+            last_node_graph_rect: None,
         }
     }
 
@@ -127,6 +136,7 @@ impl GraphoApp {
         self.project_path = None;
         self.node_graph.reset();
         self.eval_dirty = true;
+        self.pending_scene = None;
         tracing::info!("new project created");
     }
 
@@ -141,8 +151,10 @@ impl GraphoApp {
         let project: Project = serde_json::from_slice(&data)
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
         self.project = project;
+        self.project_path = Some(path.to_path_buf());
         self.node_graph.reset();
         self.eval_dirty = true;
+        self.pending_scene = None;
         Ok(())
     }
 
@@ -155,11 +167,39 @@ impl GraphoApp {
             .store(level_filter_to_u8(new_level), Ordering::Relaxed);
         self.log_level = new_level;
     }
+
+    fn try_load_default_graph(&mut self) {
+        let path = Path::new(DEFAULT_GRAPH_PATH);
+        if !path.exists() {
+            return;
+        }
+
+        match self.load_project_from(path) {
+            Ok(()) => {
+                tracing::info!("default graph loaded");
+            }
+            Err(err) => {
+                tracing::error!("failed to load default graph: {}", err);
+            }
+        }
+    }
 }
 
 impl eframe::App for GraphoApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.sync_wgpu_renderer(frame);
+        let tab_pressed = ctx.input(|i| i.key_pressed(egui::Key::Tab));
+        if tab_pressed {
+            let hover_pos = ctx.input(|i| i.pointer.hover_pos());
+            if let (Some(rect), Some(pos)) = (self.last_node_graph_rect, hover_pos) {
+                if rect.contains(pos) && !ctx.wants_keyboard_input() {
+                    ctx.input_mut(|i| {
+                        i.consume_key(egui::Modifiers::NONE, egui::Key::Tab);
+                    });
+                    self.node_graph.open_add_menu(pos);
+                }
+            }
+        }
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
@@ -523,6 +563,7 @@ impl eframe::App for GraphoApp {
                 self.node_graph
                     .show(ui, &mut self.project.graph, &mut self.eval_dirty);
             });
+            self.last_node_graph_rect = Some(right_rect);
         });
 
         self.evaluate_if_needed();
@@ -573,7 +614,11 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "grapho",
         native_options,
-        Box::new(|_cc| Ok(Box::new(GraphoApp::new(console, log_level_state)))),
+        Box::new(|_cc| {
+            let mut app = GraphoApp::new(console, log_level_state);
+            app.try_load_default_graph();
+            Ok(Box::new(app))
+        }),
     )
 }
 
@@ -667,15 +712,51 @@ impl GraphoApp {
     }
 
     fn evaluate_graph(&mut self) {
-        let output_node = match self.find_output_node() {
-            Some(node) => node,
-            None => return,
+        let outputs: Vec<_> = self
+            .project
+            .graph
+            .nodes()
+            .filter(|node| node.name == "Output")
+            .map(|node| node.id)
+            .collect();
+
+        let output_node = match outputs.as_slice() {
+            [] => {
+                if self.last_output_state != OutputState::Missing {
+                    tracing::warn!("no Output node found; nothing to evaluate");
+                    self.last_output_state = OutputState::Missing;
+                }
+                if let Some(renderer) = &self.viewport_renderer {
+                    renderer.clear_scene();
+                }
+                self.pending_scene = None;
+                return;
+            }
+            [node] => *node,
+            many => {
+                if self.last_output_state != OutputState::Multiple {
+                    tracing::error!(
+                        "multiple Output nodes found ({}); only one is supported",
+                        many.len()
+                    );
+                    self.last_output_state = OutputState::Multiple;
+                }
+                if let Some(renderer) = &self.viewport_renderer {
+                    renderer.clear_scene();
+                }
+                self.pending_scene = None;
+                return;
+            }
         };
+        self.last_output_state = OutputState::Ok;
 
         let start = Instant::now();
         match evaluate_mesh_graph(&self.project.graph, output_node, &mut self.eval_state) {
             Ok(result) => {
                 self.last_eval_ms = Some(start.elapsed().as_secs_f32() * 1000.0);
+                let output_valid = result.report.output_valid;
+                let (error_nodes, error_messages) = collect_error_state(&result.report);
+                self.node_graph.set_error_state(error_nodes, error_messages);
                 self.last_eval_report = Some(result.report);
                 if let Some(mesh) = result.output {
                     let snapshot = SceneSnapshot::from_mesh(&mesh, [0.7, 0.72, 0.75]);
@@ -685,19 +766,50 @@ impl GraphoApp {
                     } else {
                         self.pending_scene = Some(scene);
                     }
+                } else {
+                    if let Some(renderer) = &self.viewport_renderer {
+                        renderer.clear_scene();
+                    }
+                    self.pending_scene = None;
+                }
+                if !output_valid {
+                    if let Some(renderer) = &self.viewport_renderer {
+                        renderer.clear_scene();
+                    }
+                    self.pending_scene = None;
                 }
             }
             Err(err) => {
                 tracing::error!("eval failed: {:?}", err);
+                self.node_graph
+                    .set_error_state(HashSet::new(), HashMap::new());
             }
         }
     }
 
-    fn find_output_node(&self) -> Option<NodeId> {
-        self.project
-            .graph
-            .nodes()
-            .find(|node| node.name == "Output")
-            .map(|node| node.id)
+}
+
+fn collect_error_state(
+    report: &core::EvalReport,
+) -> (HashSet<core::NodeId>, HashMap<core::NodeId, String>) {
+    let mut nodes = HashSet::new();
+    let mut messages = HashMap::new();
+    for err in &report.errors {
+        match err {
+            core::EvalError::Node { node, message } => {
+                nodes.insert(*node);
+                messages.entry(*node).or_insert_with(|| message.clone());
+            }
+            core::EvalError::Upstream { node, upstream } => {
+                nodes.insert(*node);
+                messages
+                    .entry(*node)
+                    .or_insert_with(|| format!("Upstream error in nodes: {:?}", upstream));
+                for upstream_node in upstream {
+                    nodes.insert(*upstream_node);
+                }
+            }
+        }
     }
+    (nodes, messages)
 }

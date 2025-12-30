@@ -214,6 +214,45 @@ pub fn make_grid(size: [f32; 2], divisions: [u32; 2]) -> Mesh {
     Mesh::with_positions_indices(positions, indices)
 }
 
+pub fn make_uv_sphere(radius: f32, rows: u32, cols: u32) -> Mesh {
+    let rows = rows.max(3);
+    let cols = cols.max(3);
+    let mut positions = Vec::new();
+    let mut indices = Vec::new();
+
+    for r in 0..=rows {
+        let v = r as f32 / rows as f32;
+        let theta = v * std::f32::consts::PI;
+        let sin_theta = theta.sin();
+        let cos_theta = theta.cos();
+
+        for c in 0..=cols {
+            let u = c as f32 / cols as f32;
+            let phi = u * std::f32::consts::TAU;
+            let sin_phi = phi.sin();
+            let cos_phi = phi.cos();
+
+            let x = sin_theta * cos_phi;
+            let y = cos_theta;
+            let z = sin_theta * sin_phi;
+            positions.push([x * radius, y * radius, z * radius]);
+        }
+    }
+
+    let stride = cols + 1;
+    for r in 0..rows {
+        for c in 0..cols {
+            let i0 = r * stride + c;
+            let i1 = i0 + 1;
+            let i2 = i0 + stride;
+            let i3 = i2 + 1;
+            indices.extend_from_slice(&[i0, i2, i1, i1, i2, i3]);
+        }
+    }
+
+    Mesh::with_positions_indices(positions, indices)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,5 +299,12 @@ mod tests {
         let mesh = make_grid([2.0, 2.0], [2, 3]);
         assert_eq!(mesh.positions.len(), (2 + 1) * (3 + 1));
         assert_eq!(mesh.indices.len(), 2 * 3 * 6);
+    }
+
+    #[test]
+    fn sphere_has_expected_counts() {
+        let mesh = make_uv_sphere(1.0, 4, 8);
+        assert_eq!(mesh.positions.len(), (4 + 1) * (8 + 1));
+        assert_eq!(mesh.indices.len(), 4 * 8 * 6);
     }
 }
