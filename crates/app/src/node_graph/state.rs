@@ -35,6 +35,7 @@ pub struct NodeGraphState {
     add_menu_filter: String,
     add_menu_focus: bool,
     pending_wire: Option<PendingWire>,
+    info_request: Option<NodeInfoRequest>,
     graph_transform: GraphTransformState,
     error_nodes: HashSet<NodeId>,
     error_messages: HashMap<NodeId, String>,
@@ -44,6 +45,12 @@ pub struct NodeGraphState {
 pub(super) struct GraphTransformState {
     pub(super) to_global: egui::emath::TSTransform,
     pub(super) valid: bool,
+}
+
+#[derive(Clone, Copy)]
+pub struct NodeInfoRequest {
+    pub node_id: NodeId,
+    pub screen_pos: Pos2,
 }
 
 impl Default for NodeGraphState {
@@ -64,6 +71,7 @@ impl Default for NodeGraphState {
             add_menu_filter: String::new(),
             add_menu_focus: false,
             pending_wire: None,
+            info_request: None,
             graph_transform: GraphTransformState {
                 to_global: egui::emath::TSTransform::IDENTITY,
                 valid: false,
@@ -103,6 +111,7 @@ impl NodeGraphState {
             add_menu_filter: &mut self.add_menu_filter,
             add_menu_focus: &mut self.add_menu_focus,
             pending_wire: &mut self.pending_wire,
+            info_request: &mut self.info_request,
             error_nodes: &self.error_nodes,
             error_messages: &self.error_messages,
             changed: false,
@@ -356,6 +365,10 @@ impl NodeGraphState {
 
     pub fn selected_node_id(&self) -> Option<NodeId> {
         self.selected_node
+    }
+
+    pub fn take_info_request(&mut self) -> Option<NodeInfoRequest> {
+        self.info_request.take()
     }
 
     fn show_add_menu(&mut self, ui: &mut Ui, graph: &mut Graph) -> bool {

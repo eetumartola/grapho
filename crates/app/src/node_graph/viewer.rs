@@ -8,7 +8,7 @@ use core::{default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinI
 use tracing;
 
 use super::menu::builtin_menu_items;
-use super::state::{GraphTransformState, PendingWire, SnarlNode};
+use super::state::{GraphTransformState, NodeInfoRequest, PendingWire, SnarlNode};
 use super::utils::pin_color;
 
 pub(super) struct NodeGraphViewer<'a> {
@@ -25,6 +25,7 @@ pub(super) struct NodeGraphViewer<'a> {
     pub(super) add_menu_filter: &'a mut String,
     pub(super) add_menu_focus: &'a mut bool,
     pub(super) pending_wire: &'a mut Option<PendingWire>,
+    pub(super) info_request: &'a mut Option<NodeInfoRequest>,
     pub(super) error_nodes: &'a HashSet<NodeId>,
     pub(super) error_messages: &'a HashMap<NodeId, String>,
     pub(super) changed: bool,
@@ -190,6 +191,19 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         ui: &mut Ui,
         snarl: &mut Snarl<SnarlNode>,
     ) {
+        if ui.button("Node info").clicked() {
+            if let Some(core_id) = self.core_node_id(snarl, node) {
+                let pos = ui
+                    .ctx()
+                    .input(|i| i.pointer.hover_pos())
+                    .unwrap_or(ui.cursor().min);
+                *self.info_request = Some(NodeInfoRequest {
+                    node_id: core_id,
+                    screen_pos: pos,
+                });
+            }
+            ui.close();
+        }
         if ui.button("Delete node").clicked() {
             if let Some(core_id) = self.core_node_id(snarl, node) {
                 self.graph.remove_node(core_id);
@@ -256,6 +270,13 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         );
         if response.clicked_by(egui::PointerButton::Primary) {
             *self.selected_node = Some(core_id);
+        }
+        if response.clicked_by(egui::PointerButton::Middle) {
+            let pos = response.interact_pointer_pos().unwrap_or(ui_rect.center());
+            *self.info_request = Some(NodeInfoRequest {
+                node_id: core_id,
+                screen_pos: pos,
+            });
         }
     }
 

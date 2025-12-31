@@ -21,6 +21,10 @@ impl MeshEvalState {
     pub fn new() -> Self {
         Self::default()
     }
+
+    pub fn mesh_for_node(&self, node_id: NodeId) -> Option<&Mesh> {
+        self.outputs.get(&node_id)
+    }
 }
 
 pub fn evaluate_mesh_graph(
