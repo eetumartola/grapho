@@ -1,196 +1,65 @@
 use std::borrow::Cow;
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
 
-use egui::epaint::{PaintCallback, Rect};
 use egui_wgpu::wgpu::util::DeviceExt as _;
-use egui_wgpu::{Callback, CallbackResources, CallbackTrait};
 
-use crate::camera::{camera_position, camera_view_proj, CameraState};
 use crate::mesh_cache::GpuMeshCache;
 use crate::scene::RenderScene;
-mod mesh;
-use mesh::{
+
+use super::mesh::{
     bounds_from_positions, bounds_vertices, build_vertices, cube_mesh, grid_and_axes,
     normals_vertices, LineVertex, Vertex, LINE_ATTRIBUTES, VERTEX_ATTRIBUTES,
 };
 
-const DEPTH_FORMAT: egui_wgpu::wgpu::TextureFormat = egui_wgpu::wgpu::TextureFormat::Depth24Plus;
-
-pub struct ViewportRenderer {
-    target_format: egui_wgpu::wgpu::TextureFormat,
-    stats: Arc<Mutex<ViewportStatsState>>,
-    scene: Arc<Mutex<ViewportSceneState>>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ViewportShadingMode {
-    Lit,
-    Normals,
-    Depth,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ViewportDebug {
-    pub show_grid: bool,
-    pub show_axes: bool,
-    pub show_normals: bool,
-    pub show_bounds: bool,
-    pub normal_length: f32,
-    pub shading_mode: ViewportShadingMode,
-    pub depth_near: f32,
-    pub depth_far: f32,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ViewportStats {
-    pub fps: f32,
-    pub frame_time_ms: f32,
-    pub vertex_count: u32,
-    pub triangle_count: u32,
-    pub mesh_count: u32,
-    pub cache_hits: u64,
-    pub cache_misses: u64,
-    pub cache_uploads: u64,
-}
-
-impl Default for ViewportStats {
-    fn default() -> Self {
-        Self {
-            fps: 0.0,
-            frame_time_ms: 0.0,
-            vertex_count: 0,
-            triangle_count: 0,
-            mesh_count: 0,
-            cache_hits: 0,
-            cache_misses: 0,
-            cache_uploads: 0,
-        }
-    }
-}
-
-struct ViewportStatsState {
-    last_frame: Option<Instant>,
-    stats: ViewportStats,
-}
-
-struct ViewportSceneState {
-    version: u64,
-    scene: Option<RenderScene>,
-}
-
-impl ViewportRenderer {
-    pub fn new(target_format: egui_wgpu::wgpu::TextureFormat) -> Self {
-        Self {
-            target_format,
-            stats: Arc::new(Mutex::new(ViewportStatsState {
-                last_frame: None,
-                stats: ViewportStats::default(),
-            })),
-            scene: Arc::new(Mutex::new(ViewportSceneState {
-                version: 0,
-                scene: None,
-            })),
-        }
-    }
-
-    pub fn paint_callback(
-        &self,
-        rect: Rect,
-        camera: CameraState,
-        debug: ViewportDebug,
-    ) -> PaintCallback {
-        Callback::new_paint_callback(
-            rect,
-            ViewportCallback {
-                target_format: self.target_format,
-                rect,
-                camera,
-                debug,
-                stats: self.stats.clone(),
-                scene: self.scene.clone(),
-            },
-        )
-    }
-
-    pub fn stats_snapshot(&self) -> ViewportStats {
-        self.stats
-            .lock()
-            .map(|state| state.stats)
-            .unwrap_or_default()
-    }
-
-    pub fn set_scene(&self, scene: RenderScene) {
-        if let Ok(mut state) = self.scene.lock() {
-            state.version = state.version.wrapping_add(1);
-            state.scene = Some(scene);
-        }
-    }
-
-    pub fn clear_scene(&self) {
-        if let Ok(mut state) = self.scene.lock() {
-            state.version = state.version.wrapping_add(1);
-            state.scene = None;
-        }
-    }
-}
+pub(super) const DEPTH_FORMAT: egui_wgpu::wgpu::TextureFormat =
+    egui_wgpu::wgpu::TextureFormat::Depth24Plus;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct Uniforms {
-    view_proj: [[f32; 4]; 4],
-    light_dir: [f32; 3],
-    _pad0: f32,
-    camera_pos: [f32; 3],
-    _pad1: f32,
-    base_color: [f32; 3],
-    _pad2: f32,
-    debug_params: [f32; 4],
+pub(super) struct Uniforms {
+    pub(super) view_proj: [[f32; 4]; 4],
+    pub(super) light_dir: [f32; 3],
+    pub(super) _pad0: f32,
+    pub(super) camera_pos: [f32; 3],
+    pub(super) _pad1: f32,
+    pub(super) base_color: [f32; 3],
+    pub(super) _pad2: f32,
+    pub(super) debug_params: [f32; 4],
 }
 
-struct ViewportCallback {
-    target_format: egui_wgpu::wgpu::TextureFormat,
-    rect: Rect,
-    camera: CameraState,
-    debug: ViewportDebug,
-    stats: Arc<Mutex<ViewportStatsState>>,
-    scene: Arc<Mutex<ViewportSceneState>>,
-}
-
-struct PipelineState {
-    mesh_pipeline: egui_wgpu::wgpu::RenderPipeline,
-    line_pipeline: egui_wgpu::wgpu::RenderPipeline,
-    blit_pipeline: egui_wgpu::wgpu::RenderPipeline,
-    blit_bind_group: egui_wgpu::wgpu::BindGroup,
-    blit_bind_group_layout: egui_wgpu::wgpu::BindGroupLayout,
-    blit_sampler: egui_wgpu::wgpu::Sampler,
-    offscreen_texture: egui_wgpu::wgpu::Texture,
-    offscreen_view: egui_wgpu::wgpu::TextureView,
-    depth_texture: egui_wgpu::wgpu::Texture,
-    depth_view: egui_wgpu::wgpu::TextureView,
-    offscreen_size: [u32; 2],
-    uniform_buffer: egui_wgpu::wgpu::Buffer,
-    uniform_bind_group: egui_wgpu::wgpu::BindGroup,
-    mesh_cache: GpuMeshCache,
-    mesh_id: u64,
-    mesh_vertices: Vec<Vertex>,
-    mesh_bounds: ([f32; 3], [f32; 3]),
-    index_count: u32,
-    scene_version: u64,
-    base_color: [f32; 3],
-    grid_buffer: egui_wgpu::wgpu::Buffer,
-    grid_count: u32,
-    axes_buffer: egui_wgpu::wgpu::Buffer,
-    axes_count: u32,
-    normals_buffer: egui_wgpu::wgpu::Buffer,
-    normals_count: u32,
-    normals_length: f32,
-    bounds_buffer: egui_wgpu::wgpu::Buffer,
-    bounds_count: u32,
+pub(super) struct PipelineState {
+    pub(super) mesh_pipeline: egui_wgpu::wgpu::RenderPipeline,
+    pub(super) line_pipeline: egui_wgpu::wgpu::RenderPipeline,
+    pub(super) blit_pipeline: egui_wgpu::wgpu::RenderPipeline,
+    pub(super) blit_bind_group: egui_wgpu::wgpu::BindGroup,
+    pub(super) blit_bind_group_layout: egui_wgpu::wgpu::BindGroupLayout,
+    pub(super) blit_sampler: egui_wgpu::wgpu::Sampler,
+    pub(super) offscreen_texture: egui_wgpu::wgpu::Texture,
+    pub(super) offscreen_view: egui_wgpu::wgpu::TextureView,
+    pub(super) depth_texture: egui_wgpu::wgpu::Texture,
+    pub(super) depth_view: egui_wgpu::wgpu::TextureView,
+    pub(super) offscreen_size: [u32; 2],
+    pub(super) uniform_buffer: egui_wgpu::wgpu::Buffer,
+    pub(super) uniform_bind_group: egui_wgpu::wgpu::BindGroup,
+    pub(super) mesh_cache: GpuMeshCache,
+    pub(super) mesh_id: u64,
+    pub(super) mesh_vertices: Vec<Vertex>,
+    pub(super) mesh_bounds: ([f32; 3], [f32; 3]),
+    pub(super) index_count: u32,
+    pub(super) scene_version: u64,
+    pub(super) base_color: [f32; 3],
+    pub(super) grid_buffer: egui_wgpu::wgpu::Buffer,
+    pub(super) grid_count: u32,
+    pub(super) axes_buffer: egui_wgpu::wgpu::Buffer,
+    pub(super) axes_count: u32,
+    pub(super) normals_buffer: egui_wgpu::wgpu::Buffer,
+    pub(super) normals_count: u32,
+    pub(super) normals_length: f32,
+    pub(super) bounds_buffer: egui_wgpu::wgpu::Buffer,
+    pub(super) bounds_count: u32,
 }
 
 impl PipelineState {
-    fn new(
+    pub(super) fn new(
         device: &egui_wgpu::wgpu::Device,
         target_format: egui_wgpu::wgpu::TextureFormat,
     ) -> Self {
@@ -616,243 +485,7 @@ fn fs_blit(input: BlitOut) -> @location(0) vec4<f32> {
     }
 }
 
-impl CallbackTrait for ViewportCallback {
-    fn prepare(
-        &self,
-        device: &egui_wgpu::wgpu::Device,
-        queue: &egui_wgpu::wgpu::Queue,
-        screen_descriptor: &egui_wgpu::ScreenDescriptor,
-        _egui_encoder: &mut egui_wgpu::wgpu::CommandEncoder,
-        callback_resources: &mut CallbackResources,
-    ) -> Vec<egui_wgpu::wgpu::CommandBuffer> {
-        if callback_resources.get::<PipelineState>().is_none() {
-            callback_resources.insert(PipelineState::new(device, self.target_format));
-        }
-
-        let view_proj = camera_view_proj(self.camera, self.rect, screen_descriptor);
-        let camera_pos = camera_position(self.camera);
-        let target = glam::Vec3::from(self.camera.target);
-        let forward = (target - camera_pos).normalize_or_zero();
-        let mut right = forward.cross(glam::Vec3::Y).normalize_or_zero();
-        if right.length_squared() == 0.0 {
-            right = glam::Vec3::X;
-        }
-        let up = right.cross(forward).normalize_or_zero();
-        let light_dir = (-forward + right * 0.6 + up * 0.8)
-            .normalize_or_zero()
-            .to_array();
-        let shading_mode = match self.debug.shading_mode {
-            ViewportShadingMode::Lit => 0.0,
-            ViewportShadingMode::Normals => 1.0,
-            ViewportShadingMode::Depth => 2.0,
-        };
-
-        if let Some(pipeline) = callback_resources.get_mut::<PipelineState>() {
-            let width = (self.rect.width() * screen_descriptor.pixels_per_point)
-                .round()
-                .max(1.0) as u32;
-            let height = (self.rect.height() * screen_descriptor.pixels_per_point)
-                .round()
-                .max(1.0) as u32;
-            ensure_offscreen_targets(device, pipeline, self.target_format, width, height);
-
-            if let Ok(scene_state) = self.scene.lock() {
-                match scene_state.scene.clone() {
-                    Some(scene) => {
-                        if scene_state.version != pipeline.scene_version {
-                            apply_scene_to_pipeline(device, pipeline, &scene);
-                            pipeline.scene_version = scene_state.version;
-                            pipeline.base_color = scene.base_color;
-                        }
-                    }
-                    None => {
-                        if scene_state.version != pipeline.scene_version {
-                            pipeline.mesh_vertices.clear();
-                            pipeline.index_count = 0;
-                            pipeline.mesh_bounds = ([0.0; 3], [0.0; 3]);
-                            pipeline.base_color = [0.7, 0.72, 0.75];
-                            pipeline.scene_version = scene_state.version;
-                        }
-                    }
-                }
-            }
-
-            let uniforms = Uniforms {
-                view_proj: view_proj.to_cols_array_2d(),
-                light_dir,
-                _pad0: 0.0,
-                camera_pos: camera_pos.to_array(),
-                _pad1: 0.0,
-                base_color: pipeline.base_color,
-                _pad2: 0.0,
-                debug_params: [
-                    shading_mode,
-                    self.debug.depth_near,
-                    self.debug.depth_far,
-                    0.0,
-                ],
-            };
-
-            queue.write_buffer(&pipeline.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
-
-            if self.debug.show_normals
-                && (self.debug.normal_length - pipeline.normals_length).abs() > 0.0001
-            {
-                let normals_vertices =
-                    normals_vertices(&pipeline.mesh_vertices, self.debug.normal_length);
-                queue.write_buffer(
-                    &pipeline.normals_buffer,
-                    0,
-                    bytemuck::cast_slice(&normals_vertices),
-                );
-                pipeline.normals_length = self.debug.normal_length;
-            }
-
-            if let Ok(mut stats_state) = self.stats.lock() {
-                let now = Instant::now();
-                if let Some(last) = stats_state.last_frame {
-                    let dt = (now - last).as_secs_f32();
-                    if dt > 0.0 {
-                        let fps = 1.0 / dt;
-                        let frame_ms = dt * 1000.0;
-                        let alpha = 0.1;
-                        if stats_state.stats.fps == 0.0 {
-                            stats_state.stats.fps = fps;
-                            stats_state.stats.frame_time_ms = frame_ms;
-                        } else {
-                            stats_state.stats.fps += (fps - stats_state.stats.fps) * alpha;
-                            stats_state.stats.frame_time_ms +=
-                                (frame_ms - stats_state.stats.frame_time_ms) * alpha;
-                        }
-                    }
-                }
-                stats_state.last_frame = Some(now);
-
-                let cache_stats = pipeline.mesh_cache.stats_snapshot();
-                stats_state.stats.mesh_count = cache_stats.mesh_count;
-                stats_state.stats.cache_hits = cache_stats.hits;
-                stats_state.stats.cache_misses = cache_stats.misses;
-                stats_state.stats.cache_uploads = cache_stats.uploads;
-                stats_state.stats.vertex_count = pipeline.mesh_vertices.len() as u32;
-                stats_state.stats.triangle_count = pipeline.index_count / 3;
-            }
-
-            let mesh = if pipeline.index_count > 0 {
-                pipeline.mesh_cache.get(pipeline.mesh_id)
-            } else {
-                None
-            };
-            let mut render_pass =
-                _egui_encoder.begin_render_pass(&egui_wgpu::wgpu::RenderPassDescriptor {
-                    label: Some("grapho_viewport_offscreen"),
-                    color_attachments: &[Some(egui_wgpu::wgpu::RenderPassColorAttachment {
-                        view: &pipeline.offscreen_view,
-                        resolve_target: None,
-                        depth_slice: None,
-                        ops: egui_wgpu::wgpu::Operations {
-                            load: egui_wgpu::wgpu::LoadOp::Clear(egui_wgpu::wgpu::Color {
-                                r: 28.0 / 255.0,
-                                g: 28.0 / 255.0,
-                                b: 28.0 / 255.0,
-                                a: 1.0,
-                            }),
-                            store: egui_wgpu::wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: Some(
-                        egui_wgpu::wgpu::RenderPassDepthStencilAttachment {
-                            view: &pipeline.depth_view,
-                            depth_ops: Some(egui_wgpu::wgpu::Operations {
-                                load: egui_wgpu::wgpu::LoadOp::Clear(1.0),
-                                store: egui_wgpu::wgpu::StoreOp::Store,
-                            }),
-                            stencil_ops: None,
-                        },
-                    ),
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                });
-
-            render_pass.set_viewport(0.0, 0.0, width as f32, height as f32, 0.0, 1.0);
-            if let Some(mesh) = mesh {
-                render_pass.set_pipeline(&pipeline.mesh_pipeline);
-                render_pass.set_bind_group(0, &pipeline.uniform_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(
-                    mesh.index_buffer.slice(..),
-                    egui_wgpu::wgpu::IndexFormat::Uint32,
-                );
-                render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
-            }
-
-            render_pass.set_pipeline(&pipeline.line_pipeline);
-            render_pass.set_bind_group(0, &pipeline.uniform_bind_group, &[]);
-
-            if self.debug.show_grid && pipeline.grid_count > 0 {
-                render_pass.set_vertex_buffer(0, pipeline.grid_buffer.slice(..));
-                render_pass.draw(0..pipeline.grid_count, 0..1);
-            }
-
-            if self.debug.show_axes && pipeline.axes_count > 0 {
-                render_pass.set_vertex_buffer(0, pipeline.axes_buffer.slice(..));
-                render_pass.draw(0..pipeline.axes_count, 0..1);
-            }
-
-            if self.debug.show_normals && pipeline.normals_count > 0 {
-                render_pass.set_vertex_buffer(0, pipeline.normals_buffer.slice(..));
-                render_pass.draw(0..pipeline.normals_count, 0..1);
-            }
-
-            if self.debug.show_bounds && pipeline.bounds_count > 0 {
-                render_pass.set_vertex_buffer(0, pipeline.bounds_buffer.slice(..));
-                render_pass.draw(0..pipeline.bounds_count, 0..1);
-            }
-        }
-
-        Vec::new()
-    }
-
-    fn paint(
-        &self,
-        info: egui::epaint::PaintCallbackInfo,
-        render_pass: &mut egui_wgpu::wgpu::RenderPass<'static>,
-        callback_resources: &CallbackResources,
-    ) {
-        let viewport = info.viewport_in_pixels();
-        if viewport.width_px <= 0 || viewport.height_px <= 0 {
-            return;
-        }
-
-        let clip = info.clip_rect_in_pixels();
-        if clip.width_px <= 0 || clip.height_px <= 0 {
-            return;
-        }
-
-        let Some(pipeline) = callback_resources.get::<PipelineState>() else {
-            return;
-        };
-
-        render_pass.set_viewport(
-            viewport.left_px as f32,
-            viewport.top_px as f32,
-            viewport.width_px as f32,
-            viewport.height_px as f32,
-            0.0,
-            1.0,
-        );
-        render_pass.set_scissor_rect(
-            clip.left_px.max(0) as u32,
-            clip.top_px.max(0) as u32,
-            clip.width_px.max(0) as u32,
-            clip.height_px.max(0) as u32,
-        );
-        render_pass.set_pipeline(&pipeline.blit_pipeline);
-        render_pass.set_bind_group(0, &pipeline.blit_bind_group, &[]);
-        render_pass.draw(0..3, 0..1);
-    }
-}
-
-fn apply_scene_to_pipeline(
+pub(super) fn apply_scene_to_pipeline(
     device: &egui_wgpu::wgpu::Device,
     pipeline: &mut PipelineState,
     scene: &RenderScene,
@@ -874,7 +507,8 @@ fn apply_scene_to_pipeline(
         device.create_buffer_init(&egui_wgpu::wgpu::util::BufferInitDescriptor {
             label: Some("grapho_normals_vertices"),
             contents: bytemuck::cast_slice(&normals_vertices),
-            usage: egui_wgpu::wgpu::BufferUsages::VERTEX | egui_wgpu::wgpu::BufferUsages::COPY_DST,
+            usage: egui_wgpu::wgpu::BufferUsages::VERTEX
+                | egui_wgpu::wgpu::BufferUsages::COPY_DST,
         });
     pipeline.normals_count = normals_vertices.len() as u32;
 
@@ -931,7 +565,7 @@ fn create_offscreen_targets(
     (offscreen_texture, offscreen_view, depth_texture, depth_view)
 }
 
-fn ensure_offscreen_targets(
+pub(super) fn ensure_offscreen_targets(
     device: &egui_wgpu::wgpu::Device,
     pipeline: &mut PipelineState,
     target_format: egui_wgpu::wgpu::TextureFormat,
