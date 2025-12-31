@@ -378,6 +378,16 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Color can target point/vertex/primitive/detail domains
 * Viewport reflects Cd after evaluation
 
+### F13. File node (OBJ)
+
+**Depends:** F1, E1
+**Status:** done
+
+* Read mesh data from disk (OBJ)
+  **Acceptance**
+* Loads positions/indices with normals when present
+* UVs are imported as attributes when available
+
 ---
 
 ## Epic G " egui-snarl node editor integration

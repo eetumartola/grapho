@@ -318,6 +318,7 @@ pub enum ParamValue {
     Bool(bool),
     Vec2([f32; 2]),
     Vec3([f32; 3]),
+    String(String),
 }
 
 #[derive(Debug, Clone)]

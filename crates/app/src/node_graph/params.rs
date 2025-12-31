@@ -123,6 +123,17 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
             });
             (ParamValue::Vec3(v), changed)
         }
+        ParamValue::String(mut v) => {
+            let changed = param_row(ui, label, |ui| {
+                let height = ui.spacing().interact_size.y;
+                ui.add_sized(
+                    [ui.available_width().max(160.0), height],
+                    egui::TextEdit::singleline(&mut v),
+                )
+                .changed()
+            });
+            (ParamValue::String(v), changed)
+        }
     }
 }
 

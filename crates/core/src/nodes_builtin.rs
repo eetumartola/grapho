@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use glam::{EulerRot, Mat4, Quat, Vec3};
 
@@ -11,6 +12,7 @@ pub enum BuiltinNodeKind {
     Box,
     Grid,
     Sphere,
+    File,
     Transform,
     Merge,
     CopyToPoints,
@@ -26,6 +28,7 @@ impl BuiltinNodeKind {
             BuiltinNodeKind::Box => "Box",
             BuiltinNodeKind::Grid => "Grid",
             BuiltinNodeKind::Sphere => "Sphere",
+            BuiltinNodeKind::File => "File",
             BuiltinNodeKind::Transform => "Transform",
             BuiltinNodeKind::Merge => "Merge",
             BuiltinNodeKind::CopyToPoints => "Copy to Points",
@@ -42,6 +45,7 @@ pub fn builtin_kind_from_name(name: &str) -> Option<BuiltinNodeKind> {
         "Box" => Some(BuiltinNodeKind::Box),
         "Grid" => Some(BuiltinNodeKind::Grid),
         "Sphere" => Some(BuiltinNodeKind::Sphere),
+        "File" => Some(BuiltinNodeKind::File),
         "Transform" => Some(BuiltinNodeKind::Transform),
         "Merge" => Some(BuiltinNodeKind::Merge),
         "Copy to Points" => Some(BuiltinNodeKind::CopyToPoints),
@@ -58,6 +62,7 @@ pub fn builtin_definitions() -> Vec<NodeDefinition> {
         node_definition(BuiltinNodeKind::Box),
         node_definition(BuiltinNodeKind::Grid),
         node_definition(BuiltinNodeKind::Sphere),
+        node_definition(BuiltinNodeKind::File),
         node_definition(BuiltinNodeKind::Transform),
         node_definition(BuiltinNodeKind::Merge),
         node_definition(BuiltinNodeKind::CopyToPoints),
@@ -92,6 +97,12 @@ pub fn node_definition(kind: BuiltinNodeKind) -> NodeDefinition {
             outputs: vec![mesh_out()],
         },
         BuiltinNodeKind::Sphere => NodeDefinition {
+            name: kind.name().to_string(),
+            category: "Sources".to_string(),
+            inputs: Vec::new(),
+            outputs: vec![mesh_out()],
+        },
+        BuiltinNodeKind::File => NodeDefinition {
             name: kind.name().to_string(),
             category: "Sources".to_string(),
             inputs: Vec::new(),
@@ -179,6 +190,12 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
             values.insert("cols".to_string(), ParamValue::Int(32));
             values.insert("center".to_string(), ParamValue::Vec3([0.0, 0.0, 0.0]));
         }
+        BuiltinNodeKind::File => {
+            values.insert(
+                "path".to_string(),
+                ParamValue::String(r"C:\code\grapho\geo\pig.obj".to_string()),
+            );
+        }
         BuiltinNodeKind::Transform => {
             values.insert("translate".to_string(), ParamValue::Vec3([0.0, 0.0, 0.0]));
             values.insert("rotate_deg".to_string(), ParamValue::Vec3([0.0, 0.0, 0.0]));
@@ -255,6 +272,13 @@ pub fn compute_mesh_node(
                 mesh.compute_normals();
             }
             Ok(mesh)
+        }
+        BuiltinNodeKind::File => {
+            let path = param_string(params, "path", "");
+            if path.trim().is_empty() {
+                return Err("File node requires a path".to_string());
+            }
+            load_obj_mesh(path)
         }
         BuiltinNodeKind::Transform => {
             let input = inputs
@@ -441,6 +465,94 @@ fn param_vec3(params: &NodeParams, key: &str, default: [f32; 3]) -> [f32; 3] {
             _ => None,
         })
         .unwrap_or(default)
+}
+
+fn param_string<'a>(params: &'a NodeParams, key: &str, default: &'a str) -> &'a str {
+    params
+        .values
+        .get(key)
+        .and_then(|value| match value {
+            ParamValue::String(v) => Some(v.as_str()),
+            _ => None,
+        })
+        .unwrap_or(default)
+}
+
+fn load_obj_mesh(path: &str) -> Result<Mesh, String> {
+    let path = Path::new(path);
+    if !path.exists() {
+        return Err(format!("File not found: {}", path.display()));
+    }
+
+    let options = tobj::LoadOptions {
+        triangulate: true,
+        single_index: true,
+        ..Default::default()
+    };
+    let (models, _) =
+        tobj::load_obj(path, &options).map_err(|err| format!("OBJ load failed: {err}"))?;
+
+    if models.is_empty() {
+        return Err("OBJ has no geometry".to_string());
+    }
+
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+    let mut normals: Vec<[f32; 3]> = Vec::new();
+    let mut uvs: Vec<[f32; 2]> = Vec::new();
+    let mut include_normals = true;
+    let mut include_uvs = true;
+    let mut vertex_offset = 0u32;
+
+    for model in models {
+        let mesh = &model.mesh;
+        if mesh.positions.len() % 3 != 0 {
+            return Err("OBJ has malformed positions".to_string());
+        }
+        let vertex_count = mesh.positions.len() / 3;
+
+        positions.extend(mesh.positions.chunks_exact(3).map(|v| [v[0], v[1], v[2]]));
+        indices.extend(mesh.indices.iter().map(|i| i + vertex_offset));
+        vertex_offset += vertex_count as u32;
+
+        if mesh.normals.len() == mesh.positions.len() {
+            normals.extend(mesh.normals.chunks_exact(3).map(|n| [n[0], n[1], n[2]]));
+        } else {
+            include_normals = false;
+        }
+
+        if mesh.texcoords.len() / 2 == vertex_count {
+            uvs.extend(mesh.texcoords.chunks_exact(2).map(|t| [t[0], t[1]]));
+        } else {
+            include_uvs = false;
+        }
+    }
+
+    let mut mesh = Mesh::with_positions_indices(positions, indices);
+    if include_normals && !normals.is_empty() {
+        mesh.normals = Some(normals);
+    }
+    if include_uvs && !uvs.is_empty() {
+        let corner_uvs: Vec<[f32; 2]> = mesh
+            .indices
+            .iter()
+            .filter_map(|idx| uvs.get(*idx as usize).copied())
+            .collect();
+        if corner_uvs.len() == mesh.indices.len() {
+            let _ = mesh.set_attribute(
+                AttributeDomain::Vertex,
+                "uv",
+                AttributeStorage::Vec2(corner_uvs),
+            );
+        }
+        mesh.uvs = Some(uvs);
+    }
+
+    if mesh.normals.is_none() && mesh.corner_normals.is_none() {
+        mesh.compute_normals();
+    }
+
+    Ok(mesh)
 }
 
 fn scatter_points(input: &Mesh, count: usize, seed: u32) -> Result<Mesh, String> {
