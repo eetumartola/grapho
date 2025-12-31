@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use glam::{EulerRot, Mat4, Quat, Vec3};
 
+use crate::attributes::{AttributeDomain, AttributeStorage};
 use crate::graph::{NodeDefinition, NodeParams, ParamValue, PinDefinition, PinType};
 use crate::mesh::{make_box, make_grid, make_uv_sphere, Mesh};
 
@@ -15,6 +16,7 @@ pub enum BuiltinNodeKind {
     CopyToPoints,
     Scatter,
     Normal,
+    Color,
     Output,
 }
 
@@ -29,6 +31,7 @@ impl BuiltinNodeKind {
             BuiltinNodeKind::CopyToPoints => "Copy to Points",
             BuiltinNodeKind::Scatter => "Scatter",
             BuiltinNodeKind::Normal => "Normal",
+            BuiltinNodeKind::Color => "Color",
             BuiltinNodeKind::Output => "Output",
         }
     }
@@ -44,6 +47,7 @@ pub fn builtin_kind_from_name(name: &str) -> Option<BuiltinNodeKind> {
         "Copy to Points" => Some(BuiltinNodeKind::CopyToPoints),
         "Scatter" => Some(BuiltinNodeKind::Scatter),
         "Normal" => Some(BuiltinNodeKind::Normal),
+        "Color" => Some(BuiltinNodeKind::Color),
         "Output" => Some(BuiltinNodeKind::Output),
         _ => None,
     }
@@ -59,6 +63,7 @@ pub fn builtin_definitions() -> Vec<NodeDefinition> {
         node_definition(BuiltinNodeKind::CopyToPoints),
         node_definition(BuiltinNodeKind::Scatter),
         node_definition(BuiltinNodeKind::Normal),
+        node_definition(BuiltinNodeKind::Color),
         node_definition(BuiltinNodeKind::Output),
     ]
 }
@@ -140,6 +145,12 @@ pub fn node_definition(kind: BuiltinNodeKind) -> NodeDefinition {
             inputs: vec![mesh_in()],
             outputs: vec![mesh_out()],
         },
+        BuiltinNodeKind::Color => NodeDefinition {
+            name: kind.name().to_string(),
+            category: "Operators".to_string(),
+            inputs: vec![mesh_in()],
+            outputs: vec![mesh_out()],
+        },
         BuiltinNodeKind::Output => NodeDefinition {
             name: kind.name().to_string(),
             category: "Outputs".to_string(),
@@ -187,6 +198,10 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
         }
         BuiltinNodeKind::Normal => {
             values.insert("threshold_deg".to_string(), ParamValue::Float(60.0));
+        }
+        BuiltinNodeKind::Color => {
+            values.insert("color".to_string(), ParamValue::Vec3([1.0, 1.0, 1.0]));
+            values.insert("domain".to_string(), ParamValue::Int(0));
         }
         BuiltinNodeKind::Output => {}
     }
@@ -343,6 +358,25 @@ pub fn compute_mesh_node(
             }
             Ok(input)
         }
+        BuiltinNodeKind::Color => {
+            let mut input = inputs
+                .get(0)
+                .cloned()
+                .ok_or_else(|| "Color requires a mesh input".to_string())?;
+            let color = param_vec3(params, "color", [1.0, 1.0, 1.0]);
+            let domain = match param_int(params, "domain", 0).clamp(0, 3) {
+                0 => AttributeDomain::Point,
+                1 => AttributeDomain::Vertex,
+                2 => AttributeDomain::Primitive,
+                _ => AttributeDomain::Detail,
+            };
+            let count = input.attribute_domain_len(domain);
+            let values = vec![color; count];
+            input
+                .set_attribute(domain, "Cd", AttributeStorage::Vec3(values))
+                .map_err(|err| format!("Color attribute error: {:?}", err))?;
+            Ok(input)
+        }
         BuiltinNodeKind::Output => {
             let input = inputs
                 .get(0)
@@ -483,6 +517,7 @@ fn scatter_points(input: &Mesh, count: usize, seed: u32) -> Result<Mesh, String>
         normals: Some(normals),
         corner_normals: None,
         uvs: None,
+        attributes: Default::default(),
     })
 }
 

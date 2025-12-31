@@ -1,3 +1,4 @@
+mod attributes;
 mod eval;
 mod graph;
 mod mesh;
@@ -6,6 +7,10 @@ mod nodes_builtin;
 mod project;
 mod scene;
 
+pub use attributes::{
+    AttributeDomain, AttributeError, AttributeInfo, AttributeRef, AttributeStorage, AttributeType,
+    MeshAttributes,
+};
 pub use eval::{
     evaluate_from, evaluate_from_with, EvalCacheStats, EvalError, EvalNodeReport, EvalReport,
     EvalState,

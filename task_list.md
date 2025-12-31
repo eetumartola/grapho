@@ -345,6 +345,39 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
   **Acceptance**
 * Produces valid vertex normals on triangle meshes
 
+### F10. Attribute domains (Houdini-style) core architecture
+
+**Depends:** F1
+**Status:** done
+
+* Add point/vertex/primitive/detail attribute storage
+* Support Houdini naming conventions (P/N/Cd) + generic names
+* Precedence: vertex > point > primitive > detail
+  **Acceptance**
+* P/N exposed as implicit attributes and validated against mesh sizes
+* Attributes list includes P and any explicit attributes per domain
+
+### F11. Viewport attribute precedence (N/Cd)
+
+**Depends:** F10, C3
+**Status:** done
+
+* Resolve N and Cd from vertex/point/primitive/detail domains
+* Use precedence rules for shading and color display
+  **Acceptance**
+* Viewport shades from vertex N when present, otherwise point N
+* Cd drives base color when present (with precedence)
+
+### F12. Color node
+
+**Depends:** F10, E1
+**Status:** done
+
+* Add Color node to author `Cd` on a chosen domain
+  **Acceptance**
+* Color can target point/vertex/primitive/detail domains
+* Viewport reflects Cd after evaluation
+
 ---
 
 ## Epic G " egui-snarl node editor integration
@@ -389,8 +422,8 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 * Multi-select, delete, duplicate
 * Basic keyboard shortcuts: delete, ctrl+z/y (if undo exists)
-* Drop node on wire to insert between existing connections
-* Dropped wire opens add-node menu and auto-connects on create
+* Drop node on wire to insert between existing connections (pending: still not inserting)
+* Dropped wire opens add-node menu and auto-connects on create (done)
   **Acceptance**
 * Editing feels stable and predictable at ~200 nodes
 

@@ -1,0 +1,28 @@
+Points and vertices
+See how to edit points.
+
+A point is simply a point in space as defined by four numbers (X, Y, Z, W).
+
+A vertex is a reference to a point. Primitives use vertices to reference points. For example, the corners of a polygon, the center of a sphere, or a control vertex of a spline curve.
+
+Primitives can share points, while vertices are unique to a primitive.
+
+For example, you can have polygons that have corners at an identical location in space. The polygons may share a single point, in which case each polygon’s vertex at that corner would be a reference to the same point. Or, those vertices may each point to unique points that happen to have the same spacial location.
+
+This is not merely an academic distinction. Unique-ing the points (giving each vertex its own point instead of sharing points at shared corners) with the Facet SOP has several important effects on polygons:
+
+Because OpenGL no longer computes shared point normals, the polygons are individually shaded with a flat look.
+
+
+
+However, you can pre-compute the normals to preserve the smooth shading of the original surface.
+
+You can independently scale the polygon faces to create interesting effects.
+
+
+
+If you pre-compute the normals , the individual pieces retain their shading from the original surface.
+
+
+
+Similarly to unique-ing all points, you can use the Facet SOP to cusp polygons, unique-ing points selectively based on the angle at which the shared edges meet.

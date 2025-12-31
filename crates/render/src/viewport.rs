@@ -215,12 +215,14 @@ var<uniform> uniforms: Uniforms;
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
+    @location(2) color: vec3<f32>,
 };
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) normal: vec3<f32>,
     @location(1) world_pos: vec3<f32>,
+    @location(2) color: vec3<f32>,
 };
 
 @vertex
@@ -228,6 +230,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     var out: VertexOutput;
     out.world_pos = input.position;
     out.normal = input.normal;
+    out.color = input.color;
     out.position = uniforms.view_proj * vec4<f32>(input.position, 1.0);
     return out;
 }
@@ -241,7 +244,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let ndotl = max(dot(normal, light_dir), 0.0);
     let spec = pow(max(dot(normal, half_dir), 0.0), 32.0);
     let ambient = 0.15;
-    let color = uniforms.base_color * (ambient + ndotl) + vec3<f32>(0.9) * spec * 0.2;
+    let base = input.color * uniforms.base_color;
+    let color = base * (ambient + ndotl) + vec3<f32>(0.9) * spec * 0.2;
     let mode = i32(uniforms.debug_params.x + 0.5);
     if mode == 1 {
         return vec4<f32>(normal * 0.5 + vec3<f32>(0.5), 1.0);

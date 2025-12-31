@@ -1,0 +1,261 @@
+Geometry attributes
+Describes how Houdini represents geometry using details, primitives, points, vertices, and attributes.
+
+On this page	
+Attributes
+
+Geometry components
+
+Attribute precedence
+
+Applying nodes based on attribute values
+
+Dictionary attributes
+
+Intrinsic attributes
+
+Higher and lower precision storage
+
+Indexing and limit variables
+
+Common attributes
+
+Attributes
+Attributes are named values stored on vertices, points, primitives, and objects. Point color, position, UV coordinates , spline weight (W), and normal, for example, are stored as point attributes.
+
+Houdini sets some point attributes that you can use in expressions. For example, you could set the per-point color based on the vertical position (PY) of the point.
+
+You can set certain attributes manually, and if the attributes are present, they will be used by Houdini. For example, the dynamics solvers and rendering engines will often use certain attributes on the geometry if they exist.
+
+You can also set your own custom attributes to be used by node expressions, scripts, exporters, etc.
+
+The surface nodes in the Attributes group of the tab menu set different types of attributes. You can also set or create arbitrary attributes using the Attribute SOP.
+
+To see the attributes on a node’s geometry, RMB click on the node in the network editor and choose Spreadsheet to open the geometry spreadsheet for the node.
+
+Geometry components
+
+You can create and set attributes using the generic Attribute Create surface node, or the Vertex, Point, and Primitive nodes. You can attach attributes to vertices, points, and primitives (e.g. polygon faces), or the entire piece of geometry (called the detail level).
+
+Attribute precedence
+When two components in the same geometry have an attribute with the same name, the attribute on the “lower level” of geometry is used:
+
+Vertex attributes override:
+
+Point attributes, which override:
+
+Primitive attributes, which override:
+
+Detail (whole geometry) attributes
+
+Applying nodes based on attribute values
+Most surface nodes have a Group field that lets you enter a named group or pattern to select the components the node should apply to. This field recognizes special syntax that allow you to select components by the value of an attribute. For example, in a Point node’s Group field, @foo>5 selects all points whose foo attribute is greater than 5.
+
+See the section on manually specifying groups for more information.
+
+Dictionary attributes
+Since Houdini 18.5, SOP geometry supports dictionary attributes, an attribute type where each element (point, vertex, primitive/face, or the whole geometry/detail) can store a set of key/value pairs. Dictionary attributes can be used to store:
+
+Complex “blind” element data, such as game engine data, or data for a foreign geometry format that Houdini does not support natively.
+
+Metadata about geometry on the detail (whole geometry).
+
+Parameter values of the node that creates different elements for debugging. You could even store a node network as geometry by representing nodes with points, and their wires and parameters in a dictionary point attribute. See the Attribute From Parms SOP.
+
+You can also create a dictionary array attribute, where the attribute value is an array of dictionaries, rather than a single dictionary.
+
+Dictionary keys are strings. Dictionary values can be strings, numbers, arrays, or a (nested) dictionary. Dictionary attributes essentially have the same data model as JSON. In fact, UI such as the geometry spreadsheet displays the contents of a dictionary attribute like a JSON-encoded string.
+
+Currently, support for dictionary attributes is mostly in Python, VEX, and VOPs. You can manipulate dictionary attributes on geometry using VEX snippets in Attribute Wrangle, or with a Python SOP. There is also simple support for reading key values in parameter expressions.
+
+Language
+
+Support
+
+VEX/VOPs
+
+Use the standard VEX functions for reading attribute values to get the entire dictionary as a VEX dict type.
+
+You can check for the existence of a key with hasdetailattrib using ‹attr_name›.‹key› as the name.
+
+You can bind with a dictionary attribute in a VEX snippet with d@foo (or d[]@foo for a dictionary array attribute).
+
+You can use [] to index. However, VEX has return type inference, so you may need return casts to do this. (The dictionary entry is any type, but must be resolved at compile time to a specific type.) Referring to a missing key returns a zero-value.
+
+VEX/VOPs has functions for manipulating dictionaries. In addition, several functions for arrays also work with dict objects. For example, len on a dict returns the number of items in the dictionary, and isvalidindex tells whether a key is present in the dictionary.
+
+keys returns the dictionary keys as an array of strings. (It is not possible to have an equivalent function for values since arrays must be single type in VEX).
+
+The set function lets you build up a dictionary from alternating key and value arguments:
+
+dict foo = set( 'key1', 3.2, 'key2', 'stringvalue');
+
+See the documentation for the VEX dict type for more information on working with dict types in VEX.
+
+Python
+
+Use the standard hou.Geometry methods (for example, hou.Geometry.attribValue for detail attributes) to read a dictionary attribute. This will return the entire dictionary as a Python dict containing Python types (int, float, str, list, dict).
+
+Since the attribute methods return a pure Python structure, once you read the attribute value you can use regular Python to manipulate the data. For example, len() to get the number of items in the dictionary, dict["‹key›"] to get the value associated with a key, etc.
+
+Expressions
+
+You can read the value of a dictionary key in an expression with the standard functions for reading attribute values (detail, point, vertex, prim), using ‹attr_name›.‹key› as the name.
+
+If you use the string attribute functions (details, points, vertexs, prims) to read the whole attribute value, it will return a JSON-encoded string. However, there are no JSON-parsing expression functions, and limited string manipulation functions, to deal with such a string in an expression.
+
+Tip
+
+The Attribute Create node only creates an empty dictionary attribute. Currently, the best way to set dictionary values in a geometry network is with a Python SOP or Attribute Wrangle.
+
+Intrinsic attributes
+Intrinsic attributes are computed values derived from the geometry that you can access as if they were attributes.
+
+Examples of intrinsic attributes
+
+Detail
+
+intrinsic:pointcount
+
+Number of points in the geometry
+
+Detail/primitive
+
+intrinsic:bounds
+
+Bounding box of the geometry
+
+Primitive
+
+intrinsic:measuredarea
+
+Surface area of the geometry.
+
+Primitive
+
+intrinsic:memoryusage
+
+Amount of memory used by the primitive.
+
+To...	Do this
+See the available intrinsic attributes
+
+The command line utility ginfo -I prints a list of all known intrinsic attributes.
+
+You can show intrinsic attributes in the geometry spreadsheet. By default they are not shown.
+
+If you are viewing geometry at a component level that has intrinsic attributes, you can use the Intrinsics menu to show all intrinsics or choose the intrinsics to show in the spreadsheet.
+
+The Inspect tool can show the intrinsic attributes that are available on the inspected geometry.
+
+Use intrinsic attributes
+
+In HScript expressions and VEX, use the attribute functions to read intrinsic attributes, for example:
+
+prim("../volume1", 0, "intrinsic:bounds", 0)
+(You cannot use the @ attribute shortcut to read an intrinsic in VEX wrangle snippets. However, you can use primintrinsic and detailintrinsic to read the intrinsic directly instead of using the intrinsic: prefix.)
+
+In Python, you can access intrinsic attributes using hou.Geometry.intrinsicNames, .intrinsicValue(), and .intrinsicValueDict().
+
+In the group syntax, you can group based on intrinsic values. For example, @intrinsic:indexorder<100
+
+Tip
+
+Despite the name, some “intrinsic” attributes can actually be written to, causing Houdini or Mantra to change some internal setting. For example, you can set the intrinsic:unexpandedfilename intrinsic attribute on a packed primitive.
+
+Tip
+
+Bounding box intrinsic attributes, like intrinsic:bounds or intrinsic:packedbounds are returned in (xmin, xmax, ymin, ymax, zmin, zmax) order.
+
+Higher and lower precision storage
+You can choose the numeric precision of attributes you create with the Attribute Create node, and/or convert attributes to higher precision types (at the cost of more memory) or lower precision types (to save memory) using the Attrib Cast SOP node.
+
+See Attrib Cast for information on the available storage types and limitations.
+
+Indexing and limit variables
+You may see the following “pseudo-attributes” in VEX snippets. They represent the number of the current element being processed (for example, the point number), and the total number of elements in the geometry/list. See indexing and limit variables in VEX snippets for more information.
+
+@elemnum, @ptnum, @primnum, @vtxnum
+
+Represents the number of the current element when a VEX snippet is run.
+
+@numelem, @numpt, @numprim, @numvtx
+
+Represents the total number of elements in the geometry/list when a VEX snippet is run.
+
+Common attributes
+Each type of node will use certain attributes if they exist (or in some cases require them to exist), and may create/set attributes as part of their operation. See the documentation for individual nodes to see the attributes they use/set.
+
+The following lists a number of attributes that by convention are read/written by multiple node types.
+
+Geometry attributes
+P
+
+vector	
+Point position. The viewport uses this to lay out the points of the model in 3D space. You can overwrite this attribute to move the point.
+
+On point
+
+N
+
+vector	
+Normal direction. You can overwrite this attribute to change the normal.
+
+v
+
+vector	
+Velocity. The renderer uses this attribute to know where to add motion blur. This attribute is not computed automatically, but several nodes, especially particle DOPs, can set/use it. You can add velocity to points using the Trail SOP.
+
+id
+
+int	
+A unique element ID. This is not the same as the element number (for example, the point number). This is an attribute you can, for example, assign to points to keep track of them even if the point numbers change (which can happen if the number of points change). Particle DOPs often set/use this attribute.
+
+name
+
+string	
+Set this value on primitives, such as volumes or packed primitives, to find them in code by name. Some nodes set/read this attribute.
+
+piece
+
+int	
+Nodes that break up geometry into pieces will often set this attribute so that you can tell which polygonal faces are part of the same piece. Faces in the same piece will share the same value in their piece attribute. Other nodes may use this attribute to operate on pieces.
+
+Sizes and rotations
+pscale
+
+float	
+Uniform scaling factor. This is used in different ways in different places. For particle/point rendering, it controls the size of the particle/point (in world space units) at render time. For instancing, you can use it to uniformly scale the instanced geometry.
+
+scale
+
+vector	
+Whereas pscale is a single uniform scaling factor in all axes, this attribute lets you scale non-uniformly along each axis separately.
+
+width
+
+float	
+When rendering open curves, sets the line width (in world space units) at render time. If this attribute does not exist, Mantra renders the open curve as a thin line instead of a ribbon with thickness.
+
+On point
+
+lod
+
+float	
+Level of detail. This may be used in instancing.
+
+On detail, prim
+
+spritescale
+
+vector	
+When displaying particles using sprint images, this gives additional sprite scaling over pscale.
+
+Default (1, 1, 1) On point
+
+spriterot
+
+float	
+When displaying particles using sprint images, this gives sprite rotation (around camera angle) in degrees.
+
+Default 0 On point

@@ -1,5 +1,10 @@
 use glam::{Mat4, Vec3};
 
+use crate::attributes::{
+    AttributeDomain, AttributeError, AttributeInfo, AttributeRef, AttributeStorage, AttributeType,
+    MeshAttributes,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Aabb {
     pub min: [f32; 3],
@@ -13,6 +18,7 @@ pub struct Mesh {
     pub normals: Option<Vec<[f32; 3]>>,
     pub corner_normals: Option<Vec<[f32; 3]>>,
     pub uvs: Option<Vec<[f32; 2]>>,
+    pub attributes: MeshAttributes,
 }
 
 impl Mesh {
@@ -27,6 +33,182 @@ impl Mesh {
             normals: None,
             corner_normals: None,
             uvs: None,
+            attributes: MeshAttributes::default(),
+        }
+    }
+
+    pub fn attribute_domain_len(&self, domain: AttributeDomain) -> usize {
+        match domain {
+            AttributeDomain::Point => self.positions.len(),
+            AttributeDomain::Vertex => self.indices.len(),
+            AttributeDomain::Primitive => self.indices.len() / 3,
+            AttributeDomain::Detail => 1,
+        }
+    }
+
+    pub fn list_attributes(&self) -> Vec<AttributeInfo> {
+        let mut list = Vec::new();
+        if !self.positions.is_empty() {
+            list.push(AttributeInfo {
+                name: "P".to_string(),
+                domain: AttributeDomain::Point,
+                data_type: AttributeType::Vec3,
+                len: self.positions.len(),
+                implicit: true,
+            });
+        }
+        if let Some(normals) = &self.normals {
+            list.push(AttributeInfo {
+                name: "N".to_string(),
+                domain: AttributeDomain::Point,
+                data_type: AttributeType::Vec3,
+                len: normals.len(),
+                implicit: true,
+            });
+        }
+        if let Some(normals) = &self.corner_normals {
+            list.push(AttributeInfo {
+                name: "N".to_string(),
+                domain: AttributeDomain::Vertex,
+                data_type: AttributeType::Vec3,
+                len: normals.len(),
+                implicit: true,
+            });
+        }
+        for domain in AttributeDomain::ALL {
+            for (name, storage) in self.attributes.map(domain) {
+                list.push(AttributeInfo {
+                    name: name.clone(),
+                    domain,
+                    data_type: storage.data_type(),
+                    len: storage.len(),
+                    implicit: false,
+                });
+            }
+        }
+        list
+    }
+
+    pub fn attribute(&self, domain: AttributeDomain, name: &str) -> Option<AttributeRef<'_>> {
+        match (name, domain) {
+            ("P", AttributeDomain::Point) => Some(AttributeRef::Vec3(self.positions.as_slice())),
+            ("N", AttributeDomain::Point) => self
+                .normals
+                .as_ref()
+                .map(|normals| AttributeRef::Vec3(normals.as_slice())),
+            ("N", AttributeDomain::Vertex) => self
+                .corner_normals
+                .as_ref()
+                .map(|normals| AttributeRef::Vec3(normals.as_slice())),
+            _ => self
+                .attributes
+                .get(domain, name)
+                .map(AttributeStorage::as_ref),
+        }
+    }
+
+    pub fn attribute_with_precedence(
+        &self,
+        name: &str,
+    ) -> Option<(AttributeDomain, AttributeRef<'_>)> {
+        if name == "P" {
+            return self
+                .attribute(AttributeDomain::Point, name)
+                .map(|attr| (AttributeDomain::Point, attr));
+        }
+
+        if let Some(attr) = self.attribute(AttributeDomain::Vertex, name) {
+            return Some((AttributeDomain::Vertex, attr));
+        }
+        if let Some(attr) = self.attribute(AttributeDomain::Point, name) {
+            return Some((AttributeDomain::Point, attr));
+        }
+        if let Some(attr) = self.attribute(AttributeDomain::Primitive, name) {
+            return Some((AttributeDomain::Primitive, attr));
+        }
+        if let Some(attr) = self.attribute(AttributeDomain::Detail, name) {
+            return Some((AttributeDomain::Detail, attr));
+        }
+        None
+    }
+
+    pub fn set_attribute(
+        &mut self,
+        domain: AttributeDomain,
+        name: impl Into<String>,
+        storage: AttributeStorage,
+    ) -> Result<(), AttributeError> {
+        let name = name.into();
+        let expected_len = self.attribute_domain_len(domain);
+        let actual_len = storage.len();
+        if expected_len != 0 && actual_len != expected_len {
+            return Err(AttributeError::InvalidLength {
+                expected: expected_len,
+                actual: actual_len,
+            });
+        }
+
+        match (name.as_str(), domain) {
+            ("P", AttributeDomain::Point) => {
+                if storage.data_type() != AttributeType::Vec3 {
+                    return Err(AttributeError::InvalidType {
+                        expected: AttributeType::Vec3,
+                        actual: storage.data_type(),
+                    });
+                }
+                if let AttributeStorage::Vec3(values) = storage {
+                    self.positions = values;
+                    return Ok(());
+                }
+            }
+            ("P", _) => return Err(AttributeError::InvalidDomain),
+            ("N", AttributeDomain::Point) => {
+                if storage.data_type() != AttributeType::Vec3 {
+                    return Err(AttributeError::InvalidType {
+                        expected: AttributeType::Vec3,
+                        actual: storage.data_type(),
+                    });
+                }
+                if let AttributeStorage::Vec3(values) = storage {
+                    self.normals = Some(values);
+                    return Ok(());
+                }
+            }
+            ("N", AttributeDomain::Vertex) => {
+                if storage.data_type() != AttributeType::Vec3 {
+                    return Err(AttributeError::InvalidType {
+                        expected: AttributeType::Vec3,
+                        actual: storage.data_type(),
+                    });
+                }
+                if let AttributeStorage::Vec3(values) = storage {
+                    self.corner_normals = Some(values);
+                    return Ok(());
+                }
+            }
+            _ => {}
+        }
+
+        self.attributes.map_mut(domain).insert(name, storage);
+        Ok(())
+    }
+
+    pub fn remove_attribute(
+        &mut self,
+        domain: AttributeDomain,
+        name: &str,
+    ) -> Option<AttributeStorage> {
+        match (name, domain) {
+            ("P", AttributeDomain::Point) => None,
+            ("N", AttributeDomain::Point) => {
+                self.normals = None;
+                None
+            }
+            ("N", AttributeDomain::Vertex) => {
+                self.corner_normals = None;
+                None
+            }
+            _ => self.attributes.remove(domain, name),
         }
     }
 
@@ -253,8 +435,103 @@ impl Mesh {
             merged.corner_normals = Some(corner_normals);
         }
 
+        merged.attributes = merge_attributes(meshes);
         merged
     }
+}
+
+fn merge_attributes(meshes: &[Mesh]) -> MeshAttributes {
+    let mut merged = MeshAttributes::default();
+    if meshes.is_empty() {
+        return merged;
+    }
+
+    for domain in AttributeDomain::ALL {
+        let first = meshes[0].attributes.map(domain);
+        for (name, storage) in first {
+            let data_type = storage.data_type();
+            let mut compatible = true;
+            for mesh in &meshes[1..] {
+                let Some(other) = mesh.attributes.get(domain, name) else {
+                    compatible = false;
+                    break;
+                };
+                if other.data_type() != data_type {
+                    compatible = false;
+                    break;
+                }
+            }
+            if !compatible {
+                continue;
+            }
+
+            match domain {
+                AttributeDomain::Detail => {
+                    let mut all_equal = true;
+                    for mesh in &meshes[1..] {
+                        let Some(other) = mesh.attributes.get(domain, name) else {
+                            all_equal = false;
+                            break;
+                        };
+                        if other != storage {
+                            all_equal = false;
+                            break;
+                        }
+                    }
+                    if all_equal {
+                        merged.map_mut(domain).insert(name.clone(), storage.clone());
+                    }
+                }
+                _ => {
+                    let mut combined = match storage {
+                        AttributeStorage::Float(_) => AttributeStorage::Float(Vec::new()),
+                        AttributeStorage::Int(_) => AttributeStorage::Int(Vec::new()),
+                        AttributeStorage::Vec2(_) => AttributeStorage::Vec2(Vec::new()),
+                        AttributeStorage::Vec3(_) => AttributeStorage::Vec3(Vec::new()),
+                        AttributeStorage::Vec4(_) => AttributeStorage::Vec4(Vec::new()),
+                    };
+
+                    for mesh in meshes {
+                        let expected = mesh.attribute_domain_len(domain);
+                        let Some(current) = mesh.attributes.get(domain, name) else {
+                            continue;
+                        };
+                        if expected != 0 && current.len() != expected {
+                            compatible = false;
+                            break;
+                        }
+                        match (&mut combined, current) {
+                            (AttributeStorage::Float(out), AttributeStorage::Float(values)) => {
+                                out.extend_from_slice(values);
+                            }
+                            (AttributeStorage::Int(out), AttributeStorage::Int(values)) => {
+                                out.extend_from_slice(values);
+                            }
+                            (AttributeStorage::Vec2(out), AttributeStorage::Vec2(values)) => {
+                                out.extend_from_slice(values);
+                            }
+                            (AttributeStorage::Vec3(out), AttributeStorage::Vec3(values)) => {
+                                out.extend_from_slice(values);
+                            }
+                            (AttributeStorage::Vec4(out), AttributeStorage::Vec4(values)) => {
+                                out.extend_from_slice(values);
+                            }
+                            _ => {
+                                compatible = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if compatible {
+                        merged.map_mut(domain).insert(name.clone(), combined);
+                    }
+                }
+            }
+        }
+    }
+
+    merged
 }
 
 fn quantize_position(position: [f32; 3]) -> (i32, i32, i32) {
@@ -387,6 +664,7 @@ pub fn make_uv_sphere(radius: f32, rows: u32, cols: u32) -> Mesh {
         normals: Some(normals),
         corner_normals: None,
         uvs: None,
+        attributes: MeshAttributes::default(),
     }
 }
 

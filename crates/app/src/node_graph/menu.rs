@@ -49,6 +49,11 @@ pub(super) fn builtin_menu_items() -> Vec<MenuItem> {
             category: "Operators",
         },
         MenuItem {
+            kind: BuiltinNodeKind::Color,
+            name: "Color",
+            category: "Operators",
+        },
+        MenuItem {
             kind: BuiltinNodeKind::Output,
             name: "Output",
             category: "Outputs",

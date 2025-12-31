@@ -722,14 +722,22 @@ fn level_filter_to_u8(level: LevelFilter) -> u8 {
 }
 
 fn scene_to_render(scene: &SceneSnapshot) -> RenderScene {
+    let has_colors = scene.mesh.colors.is_some() || scene.mesh.corner_colors.is_some();
+    let base_color = if has_colors {
+        [1.0, 1.0, 1.0]
+    } else {
+        scene.base_color
+    };
     RenderScene {
         mesh: RenderMesh {
             positions: scene.mesh.positions.clone(),
             normals: scene.mesh.normals.clone(),
             indices: scene.mesh.indices.clone(),
             corner_normals: scene.mesh.corner_normals.clone(),
+            colors: scene.mesh.colors.clone(),
+            corner_colors: scene.mesh.corner_colors.clone(),
         },
-        base_color: scene.base_color,
+        base_color,
     }
 }
 

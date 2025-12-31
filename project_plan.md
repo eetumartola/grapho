@@ -54,6 +54,7 @@ It should initially have a 3D viewport and a DAG node view, with options for fut
 
   * Start with built-ins (P/N/uv/color)
   * Later: generic typed channels
+  * Support Houdini-style domains (point/vertex/primitive/detail) and precedence rules
 
 **Output boundary**
 
@@ -297,4 +298,7 @@ Deliverables:
 * Camera controls: orbit/pan/dolly wired to render.
 * Node graph integration, inspector, error badges/tooltips, output invalidation: in place.
 * Headless CLI mode for plan -> project JSON exists.
-* Built-in nodes implemented: Box, Grid, Sphere, Transform, Merge, Copy to Points, Output.
+* Built-in nodes implemented: Box, Grid, Sphere, Transform, Merge, Copy to Points, Scatter, Normal, Output.
+* Add-node search menu works (Tab or context menu).
+* Node graph code split into smaller modules for maintainability.
+* Core mesh attributes now support Houdini-style domains (point/vertex/primitive/detail) with P/N special-cased.

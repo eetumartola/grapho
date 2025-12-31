@@ -6,10 +6,11 @@ use egui_wgpu::wgpu;
 pub(crate) struct Vertex {
     pub(crate) position: [f32; 3],
     pub(crate) normal: [f32; 3],
+    pub(crate) color: [f32; 3],
 }
 
-pub(crate) const VERTEX_ATTRIBUTES: [wgpu::VertexAttribute; 2] =
-    wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
+pub(crate) const VERTEX_ATTRIBUTES: [wgpu::VertexAttribute; 3] =
+    wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x3];
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -58,6 +59,7 @@ pub(crate) fn cube_mesh() -> CubeMesh {
             vertices.push(Vertex {
                 position: positions[idx],
                 normal,
+                color: [1.0, 1.0, 1.0],
             });
         }
         indices.extend_from_slice(&[
@@ -108,31 +110,62 @@ pub(crate) fn bounds_from_positions(positions: &[[f32; 3]]) -> ([f32; 3], [f32; 
 }
 
 pub(crate) fn build_vertices(mesh: &RenderMesh) -> (Vec<Vertex>, Vec<u32>) {
-    if let Some(corner_normals) = &mesh.corner_normals {
-        if corner_normals.len() == mesh.indices.len() {
-            let mut vertices = Vec::with_capacity(mesh.indices.len());
-            let mut indices = Vec::with_capacity(mesh.indices.len());
-            for (idx, corner) in mesh.indices.iter().enumerate() {
-                let position = mesh
-                    .positions
-                    .get(*corner as usize)
-                    .copied()
-                    .unwrap_or([0.0, 0.0, 0.0]);
-                let normal = corner_normals.get(idx).copied().unwrap_or([0.0, 1.0, 0.0]);
-                vertices.push(Vertex { position, normal });
-                indices.push(idx as u32);
-            }
-            return (vertices, indices);
+    let corner_normals = mesh
+        .corner_normals
+        .as_ref()
+        .filter(|normals| normals.len() == mesh.indices.len());
+    let corner_colors = mesh
+        .corner_colors
+        .as_ref()
+        .filter(|colors| colors.len() == mesh.indices.len());
+    let use_corner_data = corner_normals.is_some() || corner_colors.is_some();
+
+    let fallback_normal = [0.0, 1.0, 0.0];
+    let fallback_color = [1.0, 1.0, 1.0];
+
+    if use_corner_data && !mesh.indices.is_empty() {
+        let mut vertices = Vec::with_capacity(mesh.indices.len());
+        let mut indices = Vec::with_capacity(mesh.indices.len());
+        for (idx, corner) in mesh.indices.iter().enumerate() {
+            let position = mesh
+                .positions
+                .get(*corner as usize)
+                .copied()
+                .unwrap_or([0.0, 0.0, 0.0]);
+            let normal = corner_normals
+                .and_then(|normals| normals.get(idx).copied())
+                .or_else(|| mesh.normals.get(*corner as usize).copied())
+                .unwrap_or(fallback_normal);
+            let color = corner_colors
+                .and_then(|colors| colors.get(idx).copied())
+                .or_else(|| {
+                    mesh.colors
+                        .as_ref()
+                        .and_then(|colors| colors.get(*corner as usize).copied())
+                })
+                .unwrap_or(fallback_color);
+            vertices.push(Vertex {
+                position,
+                normal,
+                color,
+            });
+            indices.push(idx as u32);
         }
+        return (vertices, indices);
     }
 
     let mut vertices = Vec::with_capacity(mesh.positions.len());
-    let fallback = [0.0, 1.0, 0.0];
     for (index, position) in mesh.positions.iter().enumerate() {
-        let normal = mesh.normals.get(index).copied().unwrap_or(fallback);
+        let normal = mesh.normals.get(index).copied().unwrap_or(fallback_normal);
+        let color = mesh
+            .colors
+            .as_ref()
+            .and_then(|colors| colors.get(index).copied())
+            .unwrap_or(fallback_color);
         vertices.push(Vertex {
             position: *position,
             normal,
+            color,
         });
     }
     (vertices, mesh.indices.clone())
