@@ -389,6 +389,8 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 * Multi-select, delete, duplicate
 * Basic keyboard shortcuts: delete, ctrl+z/y (if undo exists)
+* Drop node on wire to insert between existing connections
+* Dropped wire opens add-node menu and auto-connects on create
   **Acceptance**
 * Editing feels stable and predictable at ~200 nodes
 

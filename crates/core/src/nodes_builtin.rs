@@ -305,18 +305,18 @@ pub fn compute_mesh_node(
             for (idx, pos) in template.positions.iter().enumerate() {
                 let mut rotation = user_quat;
                 if align_to_normals {
-                    let normal = normals
-                        .get(idx)
-                        .copied()
-                        .unwrap_or([0.0, 1.0, 0.0]);
+                    let normal = normals.get(idx).copied().unwrap_or([0.0, 1.0, 0.0]);
                     let normal = Vec3::from(normal);
                     if normal.length_squared() > 0.0001 {
                         let align = Quat::from_rotation_arc(Vec3::Y, normal.normalize());
                         rotation = align * user_quat;
                     }
                 }
-                let matrix =
-                    Mat4::from_scale_rotation_translation(scale, rotation, Vec3::from(*pos) + translate);
+                let matrix = Mat4::from_scale_rotation_translation(
+                    scale,
+                    rotation,
+                    Vec3::from(*pos) + translate,
+                );
                 let mut mesh = source.clone();
                 mesh.transform(matrix);
                 copies.push(mesh);
@@ -423,9 +423,7 @@ fn scatter_points(input: &Mesh, count: usize, seed: u32) -> Result<Mesh, String>
         let i0 = tri[0] as usize;
         let i1 = tri[1] as usize;
         let i2 = tri[2] as usize;
-        if i0 >= input.positions.len()
-            || i1 >= input.positions.len()
-            || i2 >= input.positions.len()
+        if i0 >= input.positions.len() || i1 >= input.positions.len() || i2 >= input.positions.len()
         {
             areas.push(total);
             continue;

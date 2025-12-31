@@ -118,10 +118,7 @@ pub(crate) fn build_vertices(mesh: &RenderMesh) -> (Vec<Vertex>, Vec<u32>) {
                     .get(*corner as usize)
                     .copied()
                     .unwrap_or([0.0, 0.0, 0.0]);
-                let normal = corner_normals
-                    .get(idx)
-                    .copied()
-                    .unwrap_or([0.0, 1.0, 0.0]);
+                let normal = corner_normals.get(idx).copied().unwrap_or([0.0, 1.0, 0.0]);
                 vertices.push(Vertex { position, normal });
                 indices.push(idx as u32);
             }

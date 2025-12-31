@@ -875,7 +875,6 @@ impl GraphoApp {
             }
         }
     }
-
 }
 
 fn collect_error_state(
