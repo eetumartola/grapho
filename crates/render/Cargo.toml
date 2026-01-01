@@ -8,3 +8,6 @@ egui = "0.33"
 egui-wgpu = "0.33"
 glam = "0.27"
 bytemuck = { version = "1", features = ["derive"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1"

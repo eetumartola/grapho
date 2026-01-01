@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process;
 
-use core::Project;
+use grapho_core::Project;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -28,7 +28,7 @@ struct PlanNode {
 #[derive(Debug, Deserialize)]
 struct PlanPin {
     name: String,
-    pin_type: core::PinType,
+    pin_type: grapho_core::PinType,
 }
 
 #[derive(Debug, Deserialize)]
@@ -143,7 +143,7 @@ fn default_headless_plan() -> HeadlessPlan {
                 inputs: Vec::new(),
                 outputs: vec![PlanPin {
                     name: "mesh".to_string(),
-                    pin_type: core::PinType::Mesh,
+                    pin_type: grapho_core::PinType::Mesh,
                 }],
             },
             PlanNode {
@@ -151,7 +151,7 @@ fn default_headless_plan() -> HeadlessPlan {
                 category: "Output".to_string(),
                 inputs: vec![PlanPin {
                     name: "in".to_string(),
-                    pin_type: core::PinType::Mesh,
+                    pin_type: grapho_core::PinType::Mesh,
                 }],
                 outputs: Vec::new(),
             },
@@ -175,13 +175,13 @@ fn build_project_from_plan(plan: &HeadlessPlan) -> Result<Project, String> {
     let mut name_to_id = std::collections::HashMap::new();
 
     for node in &plan.nodes {
-        let node_id = project.graph.add_node(core::NodeDefinition {
+        let node_id = project.graph.add_node(grapho_core::NodeDefinition {
             name: node.name.clone(),
             category: node.category.clone(),
             inputs: node
                 .inputs
                 .iter()
-                .map(|pin| core::PinDefinition {
+                .map(|pin| grapho_core::PinDefinition {
                     name: pin.name.clone(),
                     pin_type: pin.pin_type,
                 })
@@ -189,7 +189,7 @@ fn build_project_from_plan(plan: &HeadlessPlan) -> Result<Project, String> {
             outputs: node
                 .outputs
                 .iter()
-                .map(|pin| core::PinDefinition {
+                .map(|pin| grapho_core::PinDefinition {
                     name: pin.name.clone(),
                     pin_type: pin.pin_type,
                 })
@@ -210,10 +210,10 @@ fn build_project_from_plan(plan: &HeadlessPlan) -> Result<Project, String> {
             &project.graph,
             *from_node,
             &link.from.pin,
-            core::PinKind::Output,
+            grapho_core::PinKind::Output,
         )
         .ok_or_else(|| format!("unknown output pin {}", link.from.pin))?;
-        let to_pin = find_pin_id(&project.graph, *to_node, &link.to.pin, core::PinKind::Input)
+        let to_pin = find_pin_id(&project.graph, *to_node, &link.to.pin, grapho_core::PinKind::Input)
             .ok_or_else(|| format!("unknown input pin {}", link.to.pin))?;
 
         project
@@ -226,15 +226,15 @@ fn build_project_from_plan(plan: &HeadlessPlan) -> Result<Project, String> {
 }
 
 fn find_pin_id(
-    graph: &core::Graph,
-    node_id: core::NodeId,
+    graph: &grapho_core::Graph,
+    node_id: grapho_core::NodeId,
     pin_name: &str,
-    kind: core::PinKind,
-) -> Option<core::PinId> {
+    kind: grapho_core::PinKind,
+) -> Option<grapho_core::PinId> {
     let node = graph.node(node_id)?;
     let pins = match kind {
-        core::PinKind::Input => &node.inputs,
-        core::PinKind::Output => &node.outputs,
+        grapho_core::PinKind::Input => &node.inputs,
+        grapho_core::PinKind::Output => &node.outputs,
     };
 
     pins.iter().copied().find(|pin_id| {

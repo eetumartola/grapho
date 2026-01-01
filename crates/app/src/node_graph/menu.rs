@@ -1,4 +1,4 @@
-use core::BuiltinNodeKind;
+use grapho_core::BuiltinNodeKind;
 
 pub(super) struct MenuItem {
     pub(super) kind: BuiltinNodeKind,

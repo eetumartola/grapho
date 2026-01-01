@@ -4,7 +4,7 @@ use egui::{Pos2, Rect, Ui};
 use egui_snarl::ui::{AnyPins, PinInfo, SnarlViewer};
 use egui_snarl::{InPinId, OutPinId, Snarl};
 
-use core::{default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinId};
+use grapho_core::{default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinId};
 use tracing;
 
 use super::menu::builtin_menu_items;
@@ -309,7 +309,7 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
                 let _ = snarl.connect(from.id, to.id);
                 self.changed = true;
             }
-            Err(core::GraphError::InputAlreadyConnected { .. }) => {
+            Err(grapho_core::GraphError::InputAlreadyConnected { .. }) => {
                 let _ = self.graph.remove_links_for_pin(to_pin);
                 snarl.drop_inputs(to.id);
                 if self.graph.add_link(from_pin, to_pin).is_ok() {

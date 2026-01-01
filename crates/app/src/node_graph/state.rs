@@ -4,13 +4,14 @@ use egui::{vec2, Color32, Frame, Pos2, Rect, Stroke, Ui};
 use egui_snarl::ui::{BackgroundPattern, SnarlStyle};
 use egui_snarl::{InPinId, OutPinId, Snarl};
 
-use core::{BuiltinNodeKind, Graph, NodeId, PinId, PinKind};
+use grapho_core::{BuiltinNodeKind, Graph, NodeId, PinId, PinKind};
 use tracing;
 
 use super::menu::builtin_menu_items;
 use super::params::edit_param;
 use super::utils::{
-    add_builtin_node, find_input_of_type, find_output_of_type, point_segment_distance,
+    add_builtin_node, find_input_of_type, find_output_of_type, point_bezier_distance,
+    point_segment_distance,
 };
 use super::viewer::NodeGraphViewer;
 
@@ -318,7 +319,7 @@ impl NodeGraphState {
         ui.label(format!("{} ({})", node.name, node.category));
         ui.separator();
 
-        let params: Vec<(String, core::ParamValue)> = node
+        let params: Vec<(String, grapho_core::ParamValue)> = node
             .params
             .values
             .iter()
@@ -575,7 +576,7 @@ impl NodeGraphState {
     fn find_wire_hit(&self, graph: &Graph, pos: Pos2) -> Option<(OutPinId, InPinId)> {
         let mut best = None;
         let mut best_dist = f32::MAX;
-        let threshold = 26.0;
+        let threshold = 28.0;
         for (out_pin, in_pin) in self.snarl.wires() {
             let Some(out_pos) = self.pin_pos_for_output(graph, out_pin) else {
                 continue;
@@ -583,7 +584,8 @@ impl NodeGraphState {
             let Some(in_pos) = self.pin_pos_for_input(graph, in_pin) else {
                 continue;
             };
-            let dist = point_segment_distance(pos, out_pos, in_pos);
+            let dist = point_segment_distance(pos, out_pos, in_pos)
+                .min(point_bezier_distance(pos, out_pos, in_pos));
             if dist < threshold && dist < best_dist {
                 best = Some((out_pin, in_pin));
                 best_dist = dist;

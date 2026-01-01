@@ -1,6 +1,6 @@
 use egui::Ui;
 
-use core::ParamValue;
+use grapho_core::ParamValue;
 
 pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamValue, bool) {
     match value {

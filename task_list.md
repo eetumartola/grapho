@@ -527,6 +527,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### K1. wasm build proof
 
 **Depends:** C1, G1
+**Status:** done
 
 * Build to wasm (eframe path)
 * Use WGSL shaders path for web

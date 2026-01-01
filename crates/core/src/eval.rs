@@ -1,6 +1,11 @@
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+
 use crate::graph::{Graph, GraphError, NodeId, NodeParams};
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -139,7 +144,7 @@ where
             continue;
         }
 
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         let compute_result = compute(*node_id, &node.params);
         node_report.duration_ms = start.elapsed().as_secs_f32() * 1000.0;
 

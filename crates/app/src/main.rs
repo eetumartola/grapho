@@ -6,6 +6,7 @@ mod app;
 mod headless;
 mod node_graph;
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
     let (console, log_level_state) = app::setup_tracing();
 
@@ -36,3 +37,6 @@ fn main() -> eframe::Result<()> {
         }),
     )
 }
+
+#[cfg(target_arch = "wasm32")]
+fn main() {}

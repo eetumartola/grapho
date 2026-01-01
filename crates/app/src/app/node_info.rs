@@ -1,11 +1,11 @@
 use eframe::egui;
 
-use core::{AttributeDomain, AttributeInfo, AttributeType, Mesh};
+use grapho_core::{AttributeDomain, AttributeInfo, AttributeType, Mesh};
 
 use crate::app::GraphoApp;
 
 pub(super) struct NodeInfoPanel {
-    pub(super) node_id: core::NodeId,
+    pub(super) node_id: grapho_core::NodeId,
     pub(super) screen_pos: egui::Pos2,
     pub(super) open: bool,
 }

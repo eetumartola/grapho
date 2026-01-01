@@ -3,22 +3,6 @@
 version = 4
 
 [[package]]
-name = "Grapho"
-version = "0.1.0"
-dependencies = [
- "core",
- "eframe",
- "egui",
- "egui-snarl",
- "render",
- "rfd",
- "serde",
- "serde_json",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "ab_glyph"
 version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -518,12 +502,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "core"
 version = "0.1.0"
 dependencies = [
  "glam",
  "serde",
  "tobj",
+ "web-time",
 ]
 
 [[package]]
@@ -1228,6 +1223,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdf242682df893b86f33a73828fb09ca4b2d3bb6cc95249707fc684d27484b91"
 dependencies = [
  "bitflags 2.10.0",
+]
+
+[[package]]
+name = "grapho"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "core",
+ "eframe",
+ "egui",
+ "egui-snarl",
+ "render",
+ "rfd",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
 ]
 
 [[package]]
@@ -2381,6 +2397,7 @@ dependencies = [
  "egui",
  "egui-wgpu",
  "glam",
+ "web-time",
 ]
 
 [[package]]

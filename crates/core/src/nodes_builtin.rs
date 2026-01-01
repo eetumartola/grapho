@@ -1,5 +1,9 @@
 use std::collections::BTreeMap;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
+
+#[cfg(not(target_arch = "wasm32"))]
+use tobj;
 
 use glam::{EulerRot, Mat4, Quat, Vec3};
 
@@ -478,19 +482,26 @@ fn param_string<'a>(params: &'a NodeParams, key: &str, default: &'a str) -> &'a 
         .unwrap_or(default)
 }
 
+#[cfg(target_arch = "wasm32")]
+fn load_obj_mesh(_path: &str) -> Result<Mesh, String> {
+    Err("File node is not supported in web builds".to_string())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn load_obj_mesh(path: &str) -> Result<Mesh, String> {
     let path = Path::new(path);
     if !path.exists() {
         return Err(format!("File not found: {}", path.display()));
     }
 
-    let options = tobj::LoadOptions {
-        triangulate: true,
-        single_index: true,
-        ..Default::default()
+    let (models, _) = {
+        let options = tobj::LoadOptions {
+            triangulate: true,
+            single_index: true,
+            ..Default::default()
+        };
+        tobj::load_obj(path, &options).map_err(|err| format!("OBJ load failed: {err}"))?
     };
-    let (models, _) =
-        tobj::load_obj(path, &options).map_err(|err| format!("OBJ load failed: {err}"))?;
 
     if models.is_empty() {
         return Err("OBJ has no geometry".to_string());

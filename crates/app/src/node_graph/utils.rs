@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use egui::{Color32, Pos2};
 use egui_snarl::Snarl;
 
-use core::{default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinId, PinType};
+use grapho_core::{default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinId, PinType};
 
 use super::state::SnarlNode;
 
@@ -39,7 +39,7 @@ pub(super) fn add_builtin_node(
 
 pub(super) fn find_input_of_type(
     graph: &Graph,
-    node: &core::Node,
+    node: &grapho_core::Node,
     pin_type: PinType,
 ) -> Option<(PinId, usize)> {
     node.inputs.iter().enumerate().find_map(|(idx, pin_id)| {
@@ -54,7 +54,7 @@ pub(super) fn find_input_of_type(
 
 pub(super) fn find_output_of_type(
     graph: &Graph,
-    node: &core::Node,
+    node: &grapho_core::Node,
     pin_type: PinType,
 ) -> Option<(PinId, usize)> {
     node.outputs.iter().enumerate().find_map(|(idx, pin_id)| {
@@ -76,4 +76,37 @@ pub(super) fn point_segment_distance(point: Pos2, a: Pos2, b: Pos2) -> f32 {
     let t = ((point - a).dot(ab) / ab_len).clamp(0.0, 1.0);
     let proj = a + ab * t;
     point.distance(proj)
+}
+
+pub(super) fn point_bezier_distance(point: Pos2, a: Pos2, b: Pos2) -> f32 {
+    let dx = (b.x - a.x).abs() * 0.5 + 40.0;
+    let c1 = Pos2::new(a.x + dx, a.y);
+    let c2 = Pos2::new(b.x - dx, b.y);
+    let segments = 12;
+    let mut best = f32::MAX;
+    let mut prev = a;
+    for i in 1..=segments {
+        let t = i as f32 / segments as f32;
+        let p = cubic_bezier(a, c1, c2, b, t);
+        let dist = point_segment_distance(point, prev, p);
+        if dist < best {
+            best = dist;
+        }
+        prev = p;
+    }
+    best
+}
+
+fn cubic_bezier(a: Pos2, b: Pos2, c: Pos2, d: Pos2, t: f32) -> Pos2 {
+    let t = t.clamp(0.0, 1.0);
+    let u = 1.0 - t;
+    let tt = t * t;
+    let uu = u * u;
+    let uuu = uu * u;
+    let ttt = tt * t;
+    let mut p = a.to_vec2() * uuu;
+    p += b.to_vec2() * (3.0 * uu * t);
+    p += c.to_vec2() * (3.0 * u * tt);
+    p += d.to_vec2() * ttt;
+    Pos2::new(p.x, p.y)
 }

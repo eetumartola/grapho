@@ -3,13 +3,19 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use core::{evaluate_mesh_graph, MeshEvalState, Project, SceneSnapshot, ShadingMode};
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+
+use grapho_core::{evaluate_mesh_graph, MeshEvalState, Project, SceneSnapshot, ShadingMode};
 use eframe::egui;
 use render::{
     CameraState, RenderMesh, RenderScene, ViewportDebug, ViewportRenderer, ViewportShadingMode,
 };
+#[cfg(not(target_arch = "wasm32"))]
 use rfd::FileDialog;
 use tracing::Level;
 use tracing_subscriber::filter::LevelFilter;
@@ -75,11 +81,13 @@ impl io::Write for ConsoleWriter {
             self.buffer.push_line(line.to_string());
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         let _ = io::stdout().write_all(buf);
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        #[cfg(not(target_arch = "wasm32"))]
         let _ = io::stdout().flush();
         Ok(())
     }
@@ -94,14 +102,14 @@ pub(crate) struct GraphoApp {
     viewport_renderer: Option<ViewportRenderer>,
     pending_scene: Option<RenderScene>,
     eval_state: MeshEvalState,
-    last_eval_report: Option<core::EvalReport>,
+    last_eval_report: Option<grapho_core::EvalReport>,
     last_eval_ms: Option<f32>,
     eval_dirty: bool,
     last_param_change: Option<Instant>,
     node_graph: node_graph::NodeGraphState,
     last_output_state: OutputState,
     last_node_graph_rect: Option<egui::Rect>,
-    last_selected_node: Option<core::NodeId>,
+    last_selected_node: Option<grapho_core::NodeId>,
     info_panel: Option<NodeInfoPanel>,
 }
 
@@ -145,12 +153,23 @@ impl GraphoApp {
         tracing::info!("new project created");
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn save_project_to(&self, path: &Path) -> io::Result<()> {
         let data = serde_json::to_vec_pretty(&self.project).map_err(io::Error::other)?;
         std::fs::write(path, data)?;
         Ok(())
     }
 
+    #[cfg(target_arch = "wasm32")]
+    #[allow(dead_code)]
+    fn save_project_to(&self, _path: &Path) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "File save is not available in web builds",
+        ))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn load_project_from(&mut self, path: &Path) -> io::Result<()> {
         let data = std::fs::read(path)?;
         let project: Project = serde_json::from_slice(&data)
@@ -161,6 +180,15 @@ impl GraphoApp {
         self.eval_dirty = true;
         self.pending_scene = None;
         Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[allow(dead_code)]
+    fn load_project_from(&mut self, _path: &Path) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "File load is not available in web builds",
+        ))
     }
 
     fn set_log_level(&mut self, new_level: LevelFilter) {
@@ -174,6 +202,9 @@ impl GraphoApp {
     }
 
     pub(crate) fn try_load_default_graph(&mut self) {
+        if cfg!(target_arch = "wasm32") {
+            return;
+        }
         let path = Path::new(DEFAULT_GRAPH_PATH);
         if !path.exists() {
             return;
@@ -213,54 +244,65 @@ impl eframe::App for GraphoApp {
                         ui.close();
                     }
 
-                    if ui.button("Open...").clicked() {
-                        if let Some(path) = FileDialog::new()
-                            .add_filter("Grapho Project", &["json"])
-                            .pick_file()
-                        {
-                            match self.load_project_from(&path) {
-                                Ok(()) => {
-                                    self.project_path = Some(path);
-                                    tracing::info!("project loaded");
-                                }
-                                Err(err) => {
-                                    tracing::error!("failed to load project: {}", err);
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        if ui.button("Open...").clicked() {
+                            if let Some(path) = FileDialog::new()
+                                .add_filter("Grapho Project", &["json"])
+                                .pick_file()
+                            {
+                                match self.load_project_from(&path) {
+                                    Ok(()) => {
+                                        self.project_path = Some(path);
+                                        tracing::info!("project loaded");
+                                    }
+                                    Err(err) => {
+                                        tracing::error!("failed to load project: {}", err);
+                                    }
                                 }
                             }
+                            ui.close();
                         }
-                        ui.close();
-                    }
 
-                    if ui.button("Save").clicked() {
-                        if let Some(path) = self.project_path.clone() {
-                            if let Err(err) = self.save_project_to(&path) {
-                                tracing::error!("failed to save project: {}", err);
-                            } else {
-                                tracing::info!("project saved");
-                            }
-                        } else {
-                            tracing::warn!("no project path set; use Save As");
-                        }
-                        ui.close();
-                    }
-
-                    if ui.button("Save As...").clicked() {
-                        if let Some(path) = FileDialog::new()
-                            .add_filter("Grapho Project", &["json"])
-                            .set_file_name("project.json")
-                            .save_file()
-                        {
-                            match self.save_project_to(&path) {
-                                Ok(()) => {
-                                    self.project_path = Some(path);
+                        if ui.button("Save").clicked() {
+                            if let Some(path) = self.project_path.clone() {
+                                if let Err(err) = self.save_project_to(&path) {
+                                    tracing::error!("failed to save project: {}", err);
+                                } else {
                                     tracing::info!("project saved");
                                 }
-                                Err(err) => {
-                                    tracing::error!("failed to save project: {}", err);
+                            } else {
+                                tracing::warn!("no project path set; use Save As");
+                            }
+                            ui.close();
+                        }
+
+                        if ui.button("Save As...").clicked() {
+                            if let Some(path) = FileDialog::new()
+                                .add_filter("Grapho Project", &["json"])
+                                .set_file_name("project.json")
+                                .save_file()
+                            {
+                                match self.save_project_to(&path) {
+                                    Ok(()) => {
+                                        self.project_path = Some(path);
+                                        tracing::info!("project saved");
+                                    }
+                                    Err(err) => {
+                                        tracing::error!("failed to save project: {}", err);
+                                    }
                                 }
                             }
+                            ui.close();
                         }
-                        ui.close();
+                    }
+
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        ui.add_enabled(false, egui::Button::new("Open..."));
+                        ui.add_enabled(false, egui::Button::new("Save"));
+                        ui.add_enabled(false, egui::Button::new("Save As..."));
+                        ui.label("File I/O is not available in web builds.");
                     }
                 });
 
@@ -717,6 +759,8 @@ pub(crate) fn setup_tracing() -> (ConsoleBuffer, Arc<AtomicU8>) {
         .with_writer(ConsoleMakeWriter {
             buffer: console.clone(),
         });
+    #[cfg(target_arch = "wasm32")]
+    let fmt_layer = fmt_layer.without_time();
 
     tracing_subscriber::registry()
         .with(fmt_layer.with_filter(filter_layer))
@@ -903,17 +947,17 @@ impl GraphoApp {
 }
 
 fn collect_error_state(
-    report: &core::EvalReport,
-) -> (HashSet<core::NodeId>, HashMap<core::NodeId, String>) {
+    report: &grapho_core::EvalReport,
+) -> (HashSet<grapho_core::NodeId>, HashMap<grapho_core::NodeId, String>) {
     let mut nodes = HashSet::new();
     let mut messages = HashMap::new();
     for err in &report.errors {
         match err {
-            core::EvalError::Node { node, message } => {
+            grapho_core::EvalError::Node { node, message } => {
                 nodes.insert(*node);
                 messages.entry(*node).or_insert_with(|| message.clone());
             }
-            core::EvalError::Upstream { node, upstream } => {
+            grapho_core::EvalError::Upstream { node, upstream } => {
                 nodes.insert(*node);
                 messages
                     .entry(*node)
