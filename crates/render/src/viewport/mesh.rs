@@ -229,6 +229,46 @@ pub(crate) fn point_cross_vertices(positions: &[[f32; 3]], size: f32) -> Vec<Lin
     lines
 }
 
+pub(crate) fn wireframe_vertices(positions: &[[f32; 3]], indices: &[u32]) -> Vec<LineVertex> {
+    if positions.is_empty() || indices.len() < 3 {
+        return Vec::new();
+    }
+    let mut lines = Vec::with_capacity(indices.len() / 3 * 6);
+    let color = [0.3, 0.75, 0.95];
+    for tri in indices.chunks_exact(3) {
+        let [a, b, c] = [tri[0] as usize, tri[1] as usize, tri[2] as usize];
+        let (pa, pb, pc) = match (positions.get(a), positions.get(b), positions.get(c)) {
+            (Some(pa), Some(pb), Some(pc)) => (*pa, *pb, *pc),
+            _ => continue,
+        };
+        lines.push(LineVertex {
+            position: pa,
+            color,
+        });
+        lines.push(LineVertex {
+            position: pb,
+            color,
+        });
+        lines.push(LineVertex {
+            position: pb,
+            color,
+        });
+        lines.push(LineVertex {
+            position: pc,
+            color,
+        });
+        lines.push(LineVertex {
+            position: pc,
+            color,
+        });
+        lines.push(LineVertex {
+            position: pa,
+            color,
+        });
+    }
+    lines
+}
+
 pub(crate) fn bounds_vertices(min: [f32; 3], max: [f32; 3]) -> Vec<LineVertex> {
     let color = [0.85, 0.85, 0.9];
     let [min_x, min_y, min_z] = min;

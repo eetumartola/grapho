@@ -128,7 +128,9 @@
             }
           }
         },
-        "param_version": 4
+        "param_version": 4,
+        "display": true,
+        "template": false
       },
       "4": {
         "id": 4,

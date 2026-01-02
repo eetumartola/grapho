@@ -899,7 +899,7 @@ fn write_obj(path: &str, mesh: &Mesh) -> Result<(), String> {
     let has_uv = mesh
         .uvs
         .as_ref()
-        .map_or(false, |uvs| uvs.len() == mesh.positions.len());
+        .is_some_and(|uvs| uvs.len() == mesh.positions.len());
     if let Some(uvs) = &mesh.uvs {
         if has_uv {
             for uv in uvs {
@@ -911,7 +911,7 @@ fn write_obj(path: &str, mesh: &Mesh) -> Result<(), String> {
     let has_normals = mesh
         .normals
         .as_ref()
-        .map_or(false, |normals| normals.len() == mesh.positions.len());
+        .is_some_and(|normals| normals.len() == mesh.positions.len());
     if let Some(normals) = &mesh.normals {
         if has_normals {
             for n in normals {

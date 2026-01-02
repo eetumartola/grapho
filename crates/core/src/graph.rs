@@ -43,6 +43,61 @@ impl Graph {
         self.nodes.get(&id)
     }
 
+    pub fn display_node(&self) -> Option<NodeId> {
+        self.nodes.values().find(|node| node.display).map(|node| node.id)
+    }
+
+    pub fn template_nodes(&self) -> Vec<NodeId> {
+        self.nodes
+            .values()
+            .filter(|node| node.template)
+            .map(|node| node.id)
+            .collect()
+    }
+
+    pub fn set_display_node(&mut self, node_id: Option<NodeId>) -> Result<(), GraphError> {
+        if let Some(id) = node_id {
+            if !self.nodes.contains_key(&id) {
+                return Err(GraphError::MissingNode(id));
+            }
+        }
+        for node in self.nodes.values_mut() {
+            node.display = Some(node.id) == node_id;
+        }
+        Ok(())
+    }
+
+    pub fn toggle_display_node(&mut self, node_id: NodeId) -> Result<(), GraphError> {
+        let display = self
+            .nodes
+            .get(&node_id)
+            .ok_or(GraphError::MissingNode(node_id))?
+            .display;
+        if display {
+            self.set_display_node(None)
+        } else {
+            self.set_display_node(Some(node_id))
+        }
+    }
+
+    pub fn set_template_node(&mut self, node_id: NodeId, enabled: bool) -> Result<(), GraphError> {
+        let node = self
+            .nodes
+            .get_mut(&node_id)
+            .ok_or(GraphError::MissingNode(node_id))?;
+        node.template = enabled;
+        Ok(())
+    }
+
+    pub fn toggle_template_node(&mut self, node_id: NodeId) -> Result<(), GraphError> {
+        let node = self
+            .nodes
+            .get_mut(&node_id)
+            .ok_or(GraphError::MissingNode(node_id))?;
+        node.template = !node.template;
+        Ok(())
+    }
+
     pub fn pin(&self, id: PinId) -> Option<&Pin> {
         self.pins.get(&id)
     }
@@ -92,6 +147,8 @@ impl Graph {
                 params: NodeParams::default(),
                 category: def.category,
                 param_version: 0,
+                display: false,
+                template: false,
             },
         );
 
@@ -304,6 +361,10 @@ pub struct Node {
     pub params: NodeParams,
     #[serde(default)]
     pub param_version: u64,
+    #[serde(default)]
+    pub display: bool,
+    #[serde(default)]
+    pub template: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -500,8 +500,11 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Basic keyboard shortcuts: delete, ctrl+z/y (if undo exists)
 * Drop node on wire to insert between existing connections (done)
 * Dropped wire opens add-node menu and auto-connects on create (done)
+* Display/template flags in node header (Houdini-style)
   **Acceptance**
 * Editing feels stable and predictable at ~200 nodes
+* Only one node can be the display target at a time
+* Template flag is visually distinct and toggles on/off
 
 ---
 
@@ -565,6 +568,17 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Clicking error jumps to node (optional)
   **Acceptance**
 * Errors are discoverable without digging in logs
+
+### H4. Display + template flags drive viewport output
+
+**Depends:** G4, H1
+**Status:** done
+
+* Display flag selects the mesh shown in the viewport (replaces Output node)
+* Template flag renders that mesh as a wireframe overlay
+  **Acceptance**
+* With no display flag set, viewport shows nothing
+* Template mesh renders as wireframe and does not override shaded display mesh
 
 ---
 

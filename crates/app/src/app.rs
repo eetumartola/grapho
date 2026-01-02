@@ -44,7 +44,7 @@ pub(crate) struct GraphoApp {
     eval_dirty: bool,
     last_param_change: Option<Instant>,
     node_graph: node_graph::NodeGraphState,
-    last_output_state: OutputState,
+    last_display_state: DisplayState,
     last_node_graph_rect: Option<egui::Rect>,
     last_selected_node: Option<grapho_core::NodeId>,
     info_panel: Option<NodeInfoPanel>,
@@ -54,10 +54,9 @@ pub(crate) struct GraphoApp {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum OutputState {
+enum DisplayState {
     Ok,
     Missing,
-    Multiple,
 }
 
 impl GraphoApp {
@@ -76,7 +75,7 @@ impl GraphoApp {
             eval_dirty: false,
             last_param_change: None,
             node_graph: node_graph::NodeGraphState::default(),
-            last_output_state: OutputState::Ok,
+            last_display_state: DisplayState::Ok,
             last_node_graph_rect: None,
             last_selected_node: None,
             info_panel: None,

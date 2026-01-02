@@ -29,6 +29,7 @@ pub struct NodeGraphState {
     selected_node: Option<NodeId>,
     node_ui_rects: HashMap<egui_snarl::NodeId, Rect>,
     prev_node_ui_rects: HashMap<egui_snarl::NodeId, Rect>,
+    header_button_rects: HashMap<egui_snarl::NodeId, (Rect, Rect)>,
     prev_snarl_positions: HashMap<egui_snarl::NodeId, Pos2>,
     last_dragged_node: Option<egui_snarl::NodeId>,
     dragging_node: Option<egui_snarl::NodeId>,
@@ -75,6 +76,7 @@ impl Default for NodeGraphState {
             selected_node: None,
             node_ui_rects: HashMap::new(),
             prev_node_ui_rects: HashMap::new(),
+            header_button_rects: HashMap::new(),
             prev_snarl_positions: HashMap::new(),
             last_dragged_node: None,
             dragging_node: None,
@@ -128,6 +130,7 @@ impl NodeGraphState {
 
         self.prev_node_ui_rects = std::mem::take(&mut self.node_ui_rects);
         self.node_ui_rects.clear();
+        self.header_button_rects.clear();
         let prev_positions = self.prev_snarl_positions.clone();
         self.prev_snarl_positions = self
             .snarl
@@ -146,6 +149,7 @@ impl NodeGraphState {
             next_pos: &mut self.next_pos,
             selected_node: &mut self.selected_node,
             node_rects: &mut self.node_ui_rects,
+            header_button_rects: &mut self.header_button_rects,
             graph_transform: &mut self.graph_transform,
             input_pin_positions: Rc::clone(&self.input_pin_positions),
             output_pin_positions: Rc::clone(&self.output_pin_positions),
@@ -166,6 +170,7 @@ impl NodeGraphState {
             bg_frame: Some(Frame::NONE.fill(Color32::from_rgb(18, 18, 18))),
             bg_pattern: Some(BackgroundPattern::grid(vec2(64.0, 64.0), 0.0)),
             bg_pattern_stroke: Some(Stroke::new(1.0, Color32::from_rgb(26, 26, 26))),
+            collapsible: Some(false),
             ..SnarlStyle::default()
         };
         self.snarl.show(&mut viewer, &style, "node_graph", ui);

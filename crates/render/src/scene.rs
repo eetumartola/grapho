@@ -12,4 +12,5 @@ pub struct RenderMesh {
 pub struct RenderScene {
     pub mesh: RenderMesh,
     pub base_color: [f32; 3],
+    pub template_mesh: Option<RenderMesh>,
 }

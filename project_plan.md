@@ -94,6 +94,7 @@ It should initially have a 3D viewport and a DAG node view, with options for fut
 * Triggers evaluation and feeds `SceneSnapshot` to renderer
 * Debug options UI -> toggles in renderer + core stats
 * Node info popups on middle-click or RMB menu
+* Node header flags (display/template) routed to viewport rendering
 
 ### 4) `io` crate (optional, can start in core)
 
@@ -266,6 +267,7 @@ Deliverables:
 * Copy/paste nodes (optional but big UX win)
 * Better error UX (node tinted, error message in node footer)
 * Keyboard add-node menu (Tab) and more forgiving pin hit targets
+* Display/template flags in node headers (Houdini-style)
 
 ### Milestone 6b " Node expansion + viewport UX
 
@@ -335,3 +337,4 @@ Deliverables:
 * Debug panel shows dirty-node reasons (param vs upstream changes).
 * Viewport now supports point rendering, three-point lighting with optional key shadows, edge toggles, and a spreadsheet split for attribute inspection.
 * New nodes added: OBJ Output, Copy/Transform, Noise/Mountain, Attribute Math.
+* Display/template flags: in place (viewport shows display flag output + template wireframe).

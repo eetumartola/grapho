@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use egui::{Align2, FontId, Pos2, Rect, TextStyle, Ui};
+use egui::{Align2, Color32, FontId, Pos2, Rect, TextStyle, Ui};
 use egui_snarl::ui::{AnyPins, PinInfo, SnarlPin, SnarlViewer};
 use egui_snarl::{InPinId, OutPinId, Snarl};
 
@@ -19,6 +19,7 @@ pub(super) struct NodeGraphViewer<'a> {
     pub(super) next_pos: &'a mut Pos2,
     pub(super) selected_node: &'a mut Option<NodeId>,
     pub(super) node_rects: &'a mut HashMap<egui_snarl::NodeId, Rect>,
+    pub(super) header_button_rects: &'a mut HashMap<egui_snarl::NodeId, (Rect, Rect)>,
     pub(super) graph_transform: &'a mut GraphTransformState,
     pub(super) input_pin_positions: Rc<RefCell<HashMap<InPinId, Pos2>>>,
     pub(super) output_pin_positions: Rc<RefCell<HashMap<OutPinId, Pos2>>>,
@@ -131,29 +132,155 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         snarl: &mut Snarl<SnarlNode>,
     ) {
         let title = self.title(&snarl[node]);
-        let height = ui.spacing().interact_size.y;
-        let width = ui.available_width().max(24.0);
-        let (rect, response) =
-            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click_and_drag());
-        if response.dragged_by(egui::PointerButton::Primary) && self.graph_transform.valid {
-            if let Some(node_info) = snarl.get_node_info_mut(node) {
-                let scale = self.graph_transform.to_global.scaling.max(0.0001);
-                let delta = response.drag_delta() / scale;
-                node_info.pos += delta;
-                self.changed = true;
-            }
-        }
-
+        let base_height = ui.spacing().interact_size.y;
         let font_id = ui
             .style()
             .text_styles
             .get(&TextStyle::Body)
             .cloned()
             .unwrap_or_else(|| FontId::proportional(14.0));
-        let color = ui.visuals().text_color();
-        let text_pos = rect.left_center() + egui::vec2(4.0, 0.0);
+        let title_width = ui
+            .painter()
+            .layout_no_wrap(title.clone(), font_id.clone(), Color32::WHITE)
+            .size()
+            .x;
+        let icon_size = (base_height - 6.0).max(12.0) * 2.0;
+        let height = (icon_size + 6.0).max(base_height);
+        let button_gap = 4.0;
+        let right_pad = 6.0;
+        let button_width = icon_size * 2.0 + button_gap;
+        let left_pad = 8.0;
+        let min_title_width = 32.0;
+        let desired_width =
+            (title_width.max(min_title_width) + left_pad + button_width + right_pad).max(24.0);
+        let width = ui.available_width().max(desired_width);
+        let (rect, _response) =
+            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+        let core_id = self.core_node_id(snarl, node);
+        let (display_active, template_active) = core_id
+            .and_then(|id| self.graph.node(id))
+            .map(|node| (node.display, node.template))
+            .unwrap_or((false, false));
+
+        let right_min_x = (rect.right() - right_pad - button_width).max(rect.left());
+        let left_rect = Rect::from_min_max(rect.min, Pos2::new(right_min_x, rect.bottom()));
+
+        let icon_y = rect.top() + (height - icon_size) * 0.5;
+        let display_rect = Rect::from_min_size(
+            Pos2::new(rect.right() - right_pad - icon_size, icon_y),
+            egui::vec2(icon_size, icon_size),
+        );
+        let template_rect = Rect::from_min_size(
+            Pos2::new(display_rect.left() - button_gap - icon_size, icon_y),
+            egui::vec2(icon_size, icon_size),
+        );
+        self.header_button_rects
+            .insert(node, (display_rect, template_rect));
+
+        let display_response = ui.interact(
+            display_rect,
+            ui.make_persistent_id(("node-display", node)),
+            egui::Sense::click_and_drag(),
+        );
+        let template_response = ui.interact(
+            template_rect,
+            ui.make_persistent_id(("node-template", node)),
+            egui::Sense::click_and_drag(),
+        );
+
+        let display_clicked = display_response.clicked();
+        let template_clicked = template_response.clicked();
+
+        if display_clicked {
+            if let Some(core_id) = core_id {
+                if self.graph.toggle_display_node(core_id).is_ok() {
+                    self.changed = true;
+                }
+            }
+        }
+        if template_clicked {
+            if let Some(core_id) = core_id {
+                if self.graph.toggle_template_node(core_id).is_ok() {
+                    self.changed = true;
+                }
+            }
+        }
+        display_response.on_hover_text("Display");
+        template_response.on_hover_text("Template");
+
+        let drag_response = ui.interact(
+            left_rect,
+            ui.make_persistent_id(("node-drag", node)),
+            egui::Sense::drag(),
+        );
+        if drag_response.dragged_by(egui::PointerButton::Primary) && self.graph_transform.valid {
+            if let Some(node_info) = snarl.get_node_info_mut(node) {
+                let scale = self.graph_transform.to_global.scaling.max(0.0001);
+                let delta = drag_response.drag_delta() / scale;
+                node_info.pos += delta;
+                self.changed = true;
+            }
+        }
+
+        let title_color = Color32::from_rgb(60, 60, 60);
+        let text_pos = left_rect.left_center() + egui::vec2(4.0, 0.0);
         ui.painter()
-            .text(text_pos, Align2::LEFT_CENTER, title, font_id, color);
+            .with_clip_rect(left_rect)
+            .text(text_pos, Align2::LEFT_CENTER, title, font_id, title_color);
+
+        let painter = ui.painter();
+        let inactive_fill = Color32::from_rgb(70, 70, 70);
+        let inactive_stroke = Color32::from_rgb(100, 100, 100);
+        let inactive_text = Color32::from_rgb(230, 230, 230);
+        let display_fill = if display_active {
+            Color32::from_rgb(40, 140, 230)
+        } else {
+            inactive_fill
+        };
+        let template_fill = if template_active {
+            Color32::from_rgb(150, 90, 200)
+        } else {
+            inactive_fill
+        };
+        let display_text = if display_active {
+            Color32::WHITE
+        } else {
+            inactive_text
+        };
+        let template_text = if template_active {
+            Color32::WHITE
+        } else {
+            inactive_text
+        };
+        painter.rect_filled(display_rect, 3.0, display_fill);
+        painter.rect_stroke(
+            display_rect,
+            3.0,
+            egui::Stroke::new(1.0, inactive_stroke),
+            egui::StrokeKind::Inside,
+        );
+        painter.rect_filled(template_rect, 3.0, template_fill);
+        painter.rect_stroke(
+            template_rect,
+            3.0,
+            egui::Stroke::new(1.0, inactive_stroke),
+            egui::StrokeKind::Inside,
+        );
+        painter.text(
+            display_rect.center(),
+            Align2::CENTER_CENTER,
+            "D",
+            FontId::proportional(icon_size * 0.7),
+            display_text,
+        );
+        painter.text(
+            template_rect.center(),
+            Align2::CENTER_CENTER,
+            "T",
+            FontId::proportional(icon_size * 0.7),
+            template_text,
+        );
+
     }
 
     fn inputs(&mut self, node: &SnarlNode) -> usize {
@@ -318,22 +445,43 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
 
         self.node_rects.insert(node, ui_rect);
 
+        let pointer_pos = ui
+            .ctx()
+            .input(|i| i.pointer.latest_pos().or_else(|| i.pointer.hover_pos()))
+            .map(|pos| {
+                if self.graph_transform.valid {
+                    self.graph_transform.to_global.inverse() * pos
+                } else {
+                    pos
+                }
+            });
+        let blocked = pointer_pos.is_some_and(|pos| {
+            self.header_button_rects
+                .get(&node)
+                .is_some_and(|(display_rect, template_rect)| {
+                    display_rect.contains(pos) || template_rect.contains(pos)
+                })
+        });
         let response = ui.interact(
             ui_rect,
             ui.make_persistent_id(("node-select", node)),
-            egui::Sense::click(),
+            if blocked {
+                egui::Sense::hover()
+            } else {
+                egui::Sense::click()
+            },
         );
-        if response.clicked_by(egui::PointerButton::Primary) {
+        if !blocked && response.clicked_by(egui::PointerButton::Primary) {
             *self.selected_node = Some(core_id);
         }
-        if response.clicked_by(egui::PointerButton::Middle) {
+        if !blocked && response.clicked_by(egui::PointerButton::Middle) {
             let pos = response.interact_pointer_pos().unwrap_or(ui_rect.center());
             *self.info_request = Some(NodeInfoRequest {
                 node_id: core_id,
                 screen_pos: pos,
             });
         }
-        if response.clicked_by(egui::PointerButton::Secondary) {
+        if !blocked && response.clicked_by(egui::PointerButton::Secondary) {
             let pos = ui
                 .ctx()
                 .input(|i| i.pointer.latest_pos().or_else(|| i.pointer.hover_pos()))

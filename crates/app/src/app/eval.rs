@@ -6,10 +6,10 @@ use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
-use grapho_core::{evaluate_mesh_graph, SceneSnapshot, ShadingMode};
+use grapho_core::{evaluate_mesh_graph, Mesh, SceneSnapshot, ShadingMode};
 use render::{RenderMesh, RenderScene, ViewportDebug, ViewportShadingMode};
 
-use super::{GraphoApp, OutputState};
+use super::{DisplayState, GraphoApp};
 
 impl GraphoApp {
     pub(super) fn mark_eval_dirty(&mut self) {
@@ -35,55 +35,50 @@ impl GraphoApp {
     }
 
     pub(super) fn evaluate_graph(&mut self) {
-        let outputs: Vec<_> = self
-            .project
-            .graph
-            .nodes()
-            .filter(|node| node.name == "Output")
-            .map(|node| node.id)
-            .collect();
-
-        let output_node = match outputs.as_slice() {
-            [] => {
-                if self.last_output_state != OutputState::Missing {
-                    tracing::warn!("no Output node found; nothing to evaluate");
-                    self.last_output_state = OutputState::Missing;
+        let display_node = self.project.graph.display_node();
+        let display_node = match display_node {
+            None => {
+                if self.last_display_state != DisplayState::Missing {
+                    tracing::warn!("no display flag set; nothing to evaluate");
+                    self.last_display_state = DisplayState::Missing;
                 }
                 if let Some(renderer) = &self.viewport_renderer {
                     renderer.clear_scene();
                 }
                 self.pending_scene = None;
+                self.node_graph
+                    .set_error_state(HashSet::new(), HashMap::new());
                 return;
             }
-            [node] => *node,
-            many => {
-                if self.last_output_state != OutputState::Multiple {
-                    tracing::error!(
-                        "multiple Output nodes found ({}); only one is supported",
-                        many.len()
-                    );
-                    self.last_output_state = OutputState::Multiple;
-                }
-                if let Some(renderer) = &self.viewport_renderer {
-                    renderer.clear_scene();
-                }
-                self.pending_scene = None;
-                return;
-            }
+            Some(node) => node,
         };
-        self.last_output_state = OutputState::Ok;
+        self.last_display_state = DisplayState::Ok;
+        let template_nodes = self.project.graph.template_nodes();
 
         let start = Instant::now();
-        match evaluate_mesh_graph(&self.project.graph, output_node, &mut self.eval_state) {
+        match evaluate_mesh_graph(&self.project.graph, display_node, &mut self.eval_state) {
             Ok(result) => {
                 self.last_eval_ms = Some(start.elapsed().as_secs_f32() * 1000.0);
                 let output_valid = result.report.output_valid;
-                let (error_nodes, error_messages) = collect_error_state(&result.report);
-                self.node_graph.set_error_state(error_nodes, error_messages);
+                let mut error_nodes = HashSet::new();
+                let mut error_messages = HashMap::new();
+                merge_error_state(&result.report, &mut error_nodes, &mut error_messages);
                 self.last_eval_report = Some(result.report);
                 if let Some(mesh) = result.output {
                     let snapshot = SceneSnapshot::from_mesh(&mesh, [0.7, 0.72, 0.75]);
-                    let scene = scene_to_render(&snapshot);
+                    let template_mesh = if output_valid {
+                        collect_template_meshes(
+                            &self.project.graph,
+                            display_node,
+                            &template_nodes,
+                            &mut self.eval_state,
+                            &mut error_nodes,
+                            &mut error_messages,
+                        )
+                    } else {
+                        None
+                    };
+                    let scene = scene_to_render_with_template(&snapshot, template_mesh.as_ref());
                     if let Some(renderer) = &self.viewport_renderer {
                         renderer.set_scene(scene);
                     } else {
@@ -101,6 +96,7 @@ impl GraphoApp {
                     }
                     self.pending_scene = None;
                 }
+                self.node_graph.set_error_state(error_nodes, error_messages);
             }
             Err(err) => {
                 tracing::error!("eval failed: {:?}", err);
@@ -132,7 +128,10 @@ impl GraphoApp {
     }
 }
 
-pub(super) fn scene_to_render(scene: &SceneSnapshot) -> RenderScene {
+pub(super) fn scene_to_render_with_template(
+    scene: &SceneSnapshot,
+    template: Option<&Mesh>,
+) -> RenderScene {
     let has_colors = scene.mesh.colors.is_some() || scene.mesh.corner_colors.is_some();
     let base_color = if has_colors {
         [1.0, 1.0, 1.0]
@@ -140,23 +139,67 @@ pub(super) fn scene_to_render(scene: &SceneSnapshot) -> RenderScene {
         scene.base_color
     };
     RenderScene {
-        mesh: RenderMesh {
-            positions: scene.mesh.positions.clone(),
-            normals: scene.mesh.normals.clone(),
-            indices: scene.mesh.indices.clone(),
-            corner_normals: scene.mesh.corner_normals.clone(),
-            colors: scene.mesh.colors.clone(),
-            corner_colors: scene.mesh.corner_colors.clone(),
-        },
+        mesh: render_mesh_from_scene(&scene.mesh),
         base_color,
+        template_mesh: template.map(render_mesh_from_mesh),
     }
 }
 
-pub(super) fn collect_error_state(
+fn render_mesh_from_scene(mesh: &grapho_core::SceneMesh) -> RenderMesh {
+    RenderMesh {
+        positions: mesh.positions.clone(),
+        normals: mesh.normals.clone(),
+        indices: mesh.indices.clone(),
+        corner_normals: mesh.corner_normals.clone(),
+        colors: mesh.colors.clone(),
+        corner_colors: mesh.corner_colors.clone(),
+    }
+}
+
+fn render_mesh_from_mesh(mesh: &Mesh) -> RenderMesh {
+    let snapshot = SceneSnapshot::from_mesh(mesh, [0.7, 0.72, 0.75]);
+    render_mesh_from_scene(&snapshot.mesh)
+}
+
+fn collect_template_meshes(
+    graph: &grapho_core::Graph,
+    display_node: grapho_core::NodeId,
+    template_nodes: &[grapho_core::NodeId],
+    state: &mut grapho_core::MeshEvalState,
+    error_nodes: &mut HashSet<grapho_core::NodeId>,
+    error_messages: &mut HashMap<grapho_core::NodeId, String>,
+) -> Option<Mesh> {
+    let mut meshes = Vec::new();
+    for node_id in template_nodes {
+        if *node_id == display_node {
+            continue;
+        }
+        match evaluate_mesh_graph(graph, *node_id, state) {
+            Ok(result) => {
+                merge_error_state(&result.report, error_nodes, error_messages);
+                if result.report.output_valid {
+                    if let Some(mesh) = result.output {
+                        meshes.push(mesh);
+                    }
+                }
+            }
+            Err(err) => {
+                tracing::error!("template eval failed: {:?}", err);
+            }
+        }
+    }
+    if meshes.is_empty() {
+        None
+    } else {
+        Some(Mesh::merge(&meshes))
+    }
+}
+
+fn merge_error_state(
     report: &grapho_core::EvalReport,
-) -> (HashSet<grapho_core::NodeId>, HashMap<grapho_core::NodeId, String>) {
-    let mut nodes = HashSet::new();
-    let mut messages = HashMap::new();
+    nodes: &mut HashSet<grapho_core::NodeId>,
+    messages: &mut HashMap<grapho_core::NodeId, String>,
+) {
     for err in &report.errors {
         match err {
             grapho_core::EvalError::Node { node, message } => {
@@ -174,5 +217,4 @@ pub(super) fn collect_error_state(
             }
         }
     }
-    (nodes, messages)
 }

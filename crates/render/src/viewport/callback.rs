@@ -81,6 +81,7 @@ impl CallbackTrait for ViewportCallback {
                             pipeline.index_count = 0;
                             pipeline.mesh_bounds = ([0.0; 3], [0.0; 3]);
                             pipeline.base_color = [0.7, 0.72, 0.75];
+                            pipeline.template_count = 0;
                             pipeline.scene_version = scene_state.version;
                         }
                     }
@@ -274,6 +275,11 @@ impl CallbackTrait for ViewportCallback {
                     render_pass.set_vertex_buffer(0, pipeline.point_buffer.slice(..));
                     render_pass.draw(0..pipeline.point_count, 0..1);
                 }
+            }
+
+            if pipeline.template_count > 0 {
+                render_pass.set_vertex_buffer(0, pipeline.template_buffer.slice(..));
+                render_pass.draw(0..pipeline.template_count, 0..1);
             }
 
             if self.debug.show_grid && pipeline.grid_count > 0 {

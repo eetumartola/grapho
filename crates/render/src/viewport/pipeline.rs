@@ -7,7 +7,7 @@ use crate::scene::RenderScene;
 
 use super::mesh::{
     bounds_from_positions, bounds_vertices, build_vertices, cube_mesh, grid_and_axes,
-    normals_vertices, point_cross_vertices, LineVertex, Vertex, LINE_ATTRIBUTES,
+    normals_vertices, point_cross_vertices, wireframe_vertices, LineVertex, Vertex, LINE_ATTRIBUTES,
     VERTEX_ATTRIBUTES,
 };
 
@@ -74,6 +74,8 @@ pub(super) struct PipelineState {
     pub(super) normals_length: f32,
     pub(super) bounds_buffer: egui_wgpu::wgpu::Buffer,
     pub(super) bounds_count: u32,
+    pub(super) template_buffer: egui_wgpu::wgpu::Buffer,
+    pub(super) template_count: u32,
 }
 
 impl PipelineState {
@@ -643,6 +645,16 @@ fn fs_blit(input: BlitOut) -> @location(0) vec4<f32> {
                 contents: bytemuck::cast_slice(&bounds_vertices),
                 usage: egui_wgpu::wgpu::BufferUsages::VERTEX,
             });
+        let template_buffer =
+            device.create_buffer_init(&egui_wgpu::wgpu::util::BufferInitDescriptor {
+                label: Some("grapho_template_vertices"),
+                contents: bytemuck::cast_slice(&[LineVertex {
+                    position: [0.0, 0.0, 0.0],
+                    color: [0.0, 0.0, 0.0],
+                }]),
+                usage: egui_wgpu::wgpu::BufferUsages::VERTEX
+                    | egui_wgpu::wgpu::BufferUsages::COPY_DST,
+            });
         let (grid_vertices, axes_vertices) = grid_and_axes();
         let point_count = mesh.vertices.len() as u32;
         let point_positions: Vec<[f32; 3]> =
@@ -707,6 +719,8 @@ fn fs_blit(input: BlitOut) -> @location(0) vec4<f32> {
             normals_length,
             bounds_buffer,
             bounds_count: bounds_vertices.len() as u32,
+            template_buffer,
+            template_count: 0,
         }
     }
 }
@@ -749,6 +763,24 @@ pub(super) fn apply_scene_to_pipeline(
             usage: egui_wgpu::wgpu::BufferUsages::VERTEX,
         });
     pipeline.bounds_count = bounds_vertices.len() as u32;
+
+    let template_lines = if let Some(template) = &scene.template_mesh {
+        wireframe_vertices(&template.positions, &template.indices)
+    } else {
+        Vec::new()
+    };
+    if template_lines.is_empty() {
+        pipeline.template_count = 0;
+    } else {
+        pipeline.template_buffer =
+            device.create_buffer_init(&egui_wgpu::wgpu::util::BufferInitDescriptor {
+                label: Some("grapho_template_vertices"),
+                contents: bytemuck::cast_slice(&template_lines),
+                usage: egui_wgpu::wgpu::BufferUsages::VERTEX
+                    | egui_wgpu::wgpu::BufferUsages::COPY_DST,
+            });
+        pipeline.template_count = template_lines.len() as u32;
+    }
 }
 
 fn create_offscreen_targets(
