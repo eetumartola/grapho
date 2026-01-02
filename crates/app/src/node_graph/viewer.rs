@@ -9,7 +9,7 @@ use egui_snarl::{InPinId, OutPinId, Snarl};
 use grapho_core::{default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinId};
 
 use super::menu::builtin_menu_items;
-use super::state::{GraphTransformState, NodeInfoRequest, PendingWire, SnarlNode};
+use super::state::{GraphTransformState, PendingWire, SnarlNode};
 use super::utils::pin_color;
 
 pub(super) struct NodeGraphViewer<'a> {
@@ -29,7 +29,6 @@ pub(super) struct NodeGraphViewer<'a> {
     pub(super) add_menu_filter: &'a mut String,
     pub(super) add_menu_focus: &'a mut bool,
     pub(super) pending_wire: &'a mut Option<PendingWire>,
-    pub(super) info_request: &'a mut Option<NodeInfoRequest>,
     pub(super) node_menu_request: &'a mut Option<super::state::NodeMenuRequest>,
     pub(super) error_nodes: &'a HashSet<NodeId>,
     pub(super) error_messages: &'a HashMap<NodeId, String>,
@@ -180,31 +179,13 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         let display_response = ui.interact(
             display_rect,
             ui.make_persistent_id(("node-display", node)),
-            egui::Sense::click_and_drag(),
+            egui::Sense::hover(),
         );
         let template_response = ui.interact(
             template_rect,
             ui.make_persistent_id(("node-template", node)),
-            egui::Sense::click_and_drag(),
+            egui::Sense::hover(),
         );
-
-        let display_clicked = display_response.clicked();
-        let template_clicked = template_response.clicked();
-
-        if display_clicked {
-            if let Some(core_id) = core_id {
-                if self.graph.toggle_display_node(core_id).is_ok() {
-                    self.changed = true;
-                }
-            }
-        }
-        if template_clicked {
-            if let Some(core_id) = core_id {
-                if self.graph.toggle_template_node(core_id).is_ok() {
-                    self.changed = true;
-                }
-            }
-        }
         display_response.on_hover_text("Display");
         template_response.on_hover_text("Template");
 
@@ -224,9 +205,13 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
 
         let title_color = Color32::from_rgb(60, 60, 60);
         let text_pos = left_rect.left_center() + egui::vec2(4.0, 0.0);
-        ui.painter()
-            .with_clip_rect(left_rect)
-            .text(text_pos, Align2::LEFT_CENTER, title, font_id, title_color);
+        ui.painter().with_clip_rect(left_rect).text(
+            text_pos,
+            Align2::LEFT_CENTER,
+            title,
+            font_id,
+            title_color,
+        );
 
         let painter = ui.painter();
         let inactive_fill = Color32::from_rgb(70, 70, 70);
@@ -280,7 +265,6 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
             FontId::proportional(icon_size * 0.7),
             template_text,
         );
-
     }
 
     fn inputs(&mut self, node: &SnarlNode) -> usize {
@@ -445,6 +429,35 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
 
         self.node_rects.insert(node, ui_rect);
 
+        let clicked_pos = ui.input(|i| {
+            if i.pointer.primary_clicked() {
+                i.pointer.interact_pos()
+            } else {
+                None
+            }
+        });
+        if let (Some(pos), Some((display_rect, template_rect))) =
+            (clicked_pos, self.header_button_rects.get(&node))
+        {
+            let pos = if self.graph_transform.valid {
+                self.graph_transform.to_global.inverse() * pos
+            } else {
+                pos
+            };
+            if display_rect.contains(pos) {
+                if self.graph.toggle_display_node(core_id).is_ok() {
+                    self.changed = true;
+                }
+                return;
+            }
+            if template_rect.contains(pos) {
+                if self.graph.toggle_template_node(core_id).is_ok() {
+                    self.changed = true;
+                }
+                return;
+            }
+        }
+
         let pointer_pos = ui
             .ctx()
             .input(|i| i.pointer.latest_pos().or_else(|| i.pointer.hover_pos()))
@@ -473,13 +486,6 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         );
         if !blocked && response.clicked_by(egui::PointerButton::Primary) {
             *self.selected_node = Some(core_id);
-        }
-        if !blocked && response.clicked_by(egui::PointerButton::Middle) {
-            let pos = response.interact_pointer_pos().unwrap_or(ui_rect.center());
-            *self.info_request = Some(NodeInfoRequest {
-                node_id: core_id,
-                screen_pos: pos,
-            });
         }
         if !blocked && response.clicked_by(egui::PointerButton::Secondary) {
             let pos = ui

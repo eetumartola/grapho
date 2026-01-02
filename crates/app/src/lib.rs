@@ -1,4 +1,7 @@
-#![cfg_attr(not(target_arch = "wasm32"), allow(dead_code, unused_imports, non_snake_case))]
+#![cfg_attr(
+    not(target_arch = "wasm32"),
+    allow(dead_code, unused_imports, non_snake_case)
+)]
 
 #[cfg(target_arch = "wasm32")]
 mod app;
@@ -30,11 +33,15 @@ pub async fn start(canvas_id: &str) -> Result<(), wasm_bindgen::JsValue> {
         .dyn_into()
         .map_err(|_| JsValue::from_str("canvas is not HtmlCanvasElement"))?;
     runner
-        .start(canvas, web_options, Box::new(|_cc| {
-            let (console, log_level_state) = app::setup_tracing();
-            let mut app = GraphoApp::new(console, log_level_state);
-            app.try_load_default_graph();
-            Ok(Box::new(app))
-        }))
+        .start(
+            canvas,
+            web_options,
+            Box::new(|_cc| {
+                let (console, log_level_state) = app::setup_tracing();
+                let mut app = GraphoApp::new(console, log_level_state);
+                app.try_load_default_graph();
+                Ok(Box::new(app))
+            }),
+        )
         .await
 }

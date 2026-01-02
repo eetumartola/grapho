@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use egui::{Color32, Pos2};
 use egui_snarl::Snarl;
 
-use grapho_core::{default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinId, PinType};
+use grapho_core::{
+    default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinId, PinType,
+};
 
 use super::state::SnarlNode;
 
@@ -135,8 +137,8 @@ fn wire_bezier_5(frame_size: f32, from: Pos2, to: Pos2) -> [Pos2; 6] {
     }
 
     if from_2.x <= to_2.x {
-        let t = (between - (to_2.y - from_2.y).abs())
-            / (frame_size * 2.0 - (to_2.y - from_2.y).abs());
+        let t =
+            (between - (to_2.y - from_2.y).abs()) / (frame_size * 2.0 - (to_2.y - from_2.y).abs());
 
         let mut middle_1 = from_2 + (to_2 - from_2).normalized() * frame_size;
         let mut middle_2 = to_2 + (from_2 - to_2).normalized() * frame_size;
@@ -144,7 +146,10 @@ fn wire_bezier_5(frame_size: f32, from: Pos2, to: Pos2) -> [Pos2; 6] {
         if from_2.y >= to_2.y + frame_size {
             let u = (from_2.y - to_2.y - frame_size) / frame_size;
 
-            let t0_middle_1 = Pos2::new((1.0 - u) * frame_size + from_2.x, -u * frame_size + from_2.y);
+            let t0_middle_1 = Pos2::new(
+                (1.0 - u) * frame_size + from_2.x,
+                -u * frame_size + from_2.y,
+            );
             let t0_middle_2 = Pos2::new(to_2.x, to_2.y + frame_size);
 
             middle_1 = t0_middle_1.lerp(middle_1, t);
@@ -152,7 +157,8 @@ fn wire_bezier_5(frame_size: f32, from: Pos2, to: Pos2) -> [Pos2; 6] {
         } else if from_2.y >= to_2.y {
             let u = (from_2.y - to_2.y) / frame_size;
 
-            let t0_middle_1 = Pos2::new(u * frame_size + from_2.x, (1.0 - u) * frame_size + from_2.y);
+            let t0_middle_1 =
+                Pos2::new(u * frame_size + from_2.x, (1.0 - u) * frame_size + from_2.y);
             let t0_middle_2 = Pos2::new(to_2.x, to_2.y + frame_size);
 
             middle_1 = t0_middle_1.lerp(middle_1, t);
@@ -187,7 +193,10 @@ fn wire_bezier_5(frame_size: f32, from: Pos2, to: Pos2) -> [Pos2; 6] {
     if from_2.y >= to_2.y + frame_size {
         let t = (from_2.y - to_2.y - frame_size) / frame_size;
 
-        let middle_1 = Pos2::new((1.0 - t) * frame_size + from_2.x, -t * frame_size + from_2.y);
+        let middle_1 = Pos2::new(
+            (1.0 - t) * frame_size + from_2.x,
+            -t * frame_size + from_2.y,
+        );
         let middle_2 = Pos2::new(to_2.x, to_2.y + frame_size);
         return [from, from_2, middle_1, middle_2, to_2, to];
     }

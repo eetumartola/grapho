@@ -46,8 +46,10 @@ impl Default for ProjectSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PanelSettings {
     pub show_inspector: bool,
+    pub show_spreadsheet: bool,
     pub show_debug: bool,
     pub show_console: bool,
 }
@@ -56,6 +58,7 @@ impl Default for PanelSettings {
     fn default() -> Self {
         Self {
             show_inspector: true,
+            show_spreadsheet: true,
             show_debug: false,
             show_console: false,
         }

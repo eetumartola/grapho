@@ -11,8 +11,12 @@ pub(super) struct NodeInfoPanel {
 }
 
 impl GraphoApp {
-    pub(super) fn show_node_info_panel(&mut self, ctx: &egui::Context) {
-        let Some(mut panel) = self.info_panel.take() else {
+    pub(super) fn show_node_info_panel(
+        &mut self,
+        ctx: &egui::Context,
+        panel_slot: &mut Option<NodeInfoPanel>,
+    ) {
+        let Some(mut panel) = panel_slot.take() else {
             return;
         };
         if !panel.open {
@@ -42,7 +46,7 @@ impl GraphoApp {
 
         panel.open = open;
         if panel.open {
-            self.info_panel = Some(panel);
+            *panel_slot = Some(panel);
         }
     }
 

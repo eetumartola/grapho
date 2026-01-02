@@ -254,10 +254,7 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
                 "rotate_step_deg".to_string(),
                 ParamValue::Vec3([0.0, 0.0, 0.0]),
             );
-            values.insert(
-                "scale_step".to_string(),
-                ParamValue::Vec3([0.0, 0.0, 0.0]),
-            );
+            values.insert("scale_step".to_string(), ParamValue::Vec3([0.0, 0.0, 0.0]));
         }
         BuiltinNodeKind::Merge => {}
         BuiltinNodeKind::CopyToPoints => {
@@ -292,7 +289,10 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
             values.insert("value_v3".to_string(), ParamValue::Vec3([1.0, 1.0, 1.0]));
         }
         BuiltinNodeKind::ObjOutput => {
-            values.insert("path".to_string(), ParamValue::String("output.obj".to_string()));
+            values.insert(
+                "path".to_string(),
+                ParamValue::String("output.obj".to_string()),
+            );
         }
         BuiltinNodeKind::Output => {}
     }
@@ -307,8 +307,8 @@ pub fn compute_mesh_node(
 ) -> Result<Mesh, String> {
     match kind {
         BuiltinNodeKind::Box => {
-            let size = param_vec3(params, "size", [1.0, 1.0, 1.0]);
-            let center = param_vec3(params, "center", [0.0, 0.0, 0.0]);
+            let size = params.get_vec3("size", [1.0, 1.0, 1.0]);
+            let center = params.get_vec3("center", [0.0, 0.0, 0.0]);
             let mut mesh = make_box(size);
             if center != [0.0, 0.0, 0.0] {
                 mesh.transform(Mat4::from_translation(Vec3::from(center)));
@@ -319,10 +319,10 @@ pub fn compute_mesh_node(
             Ok(mesh)
         }
         BuiltinNodeKind::Grid => {
-            let size = param_vec2(params, "size", [2.0, 2.0]);
-            let rows = param_int(params, "rows", 10).max(1) as u32;
-            let cols = param_int(params, "cols", 10).max(1) as u32;
-            let center = param_vec3(params, "center", [0.0, 0.0, 0.0]);
+            let size = params.get_vec2("size", [2.0, 2.0]);
+            let rows = params.get_int("rows", 10).max(1) as u32;
+            let cols = params.get_int("cols", 10).max(1) as u32;
+            let center = params.get_vec3("center", [0.0, 0.0, 0.0]);
             let divisions = [cols, rows];
             let mut mesh = make_grid(size, divisions);
             if center != [0.0, 0.0, 0.0] {
@@ -334,10 +334,10 @@ pub fn compute_mesh_node(
             Ok(mesh)
         }
         BuiltinNodeKind::Sphere => {
-            let radius = param_float(params, "radius", 1.0).max(0.0);
-            let rows = param_int(params, "rows", 16).max(3) as u32;
-            let cols = param_int(params, "cols", 32).max(3) as u32;
-            let center = param_vec3(params, "center", [0.0, 0.0, 0.0]);
+            let radius = params.get_float("radius", 1.0).max(0.0);
+            let rows = params.get_int("rows", 16).max(3) as u32;
+            let cols = params.get_int("cols", 32).max(3) as u32;
+            let center = params.get_vec3("center", [0.0, 0.0, 0.0]);
             let mut mesh = make_uv_sphere(radius, rows, cols);
             if center != [0.0, 0.0, 0.0] {
                 mesh.transform(Mat4::from_translation(Vec3::from(center)));
@@ -348,21 +348,18 @@ pub fn compute_mesh_node(
             Ok(mesh)
         }
         BuiltinNodeKind::File => {
-            let path = param_string(params, "path", "");
+            let path = params.get_string("path", "");
             if path.trim().is_empty() {
                 return Err("File node requires a path".to_string());
             }
             load_obj_mesh(path)
         }
         BuiltinNodeKind::Transform => {
-            let input = inputs
-                .first()
-                .cloned()
-                .ok_or_else(|| "Transform requires a mesh input".to_string())?;
-            let translate = param_vec3(params, "translate", [0.0, 0.0, 0.0]);
-            let rotate_deg = param_vec3(params, "rotate_deg", [0.0, 0.0, 0.0]);
-            let scale = param_vec3(params, "scale", [1.0, 1.0, 1.0]);
-            let pivot = param_vec3(params, "pivot", [0.0, 0.0, 0.0]);
+            let input = require_input_at(inputs, 0, "Transform requires a mesh input")?;
+            let translate = params.get_vec3("translate", [0.0, 0.0, 0.0]);
+            let rotate_deg = params.get_vec3("rotate_deg", [0.0, 0.0, 0.0]);
+            let scale = params.get_vec3("scale", [1.0, 1.0, 1.0]);
+            let pivot = params.get_vec3("pivot", [0.0, 0.0, 0.0]);
 
             let rot = Vec3::from(rotate_deg) * std::f32::consts::PI / 180.0;
             let quat = Quat::from_euler(EulerRot::XYZ, rot.x, rot.y, rot.z);
@@ -376,17 +373,14 @@ pub fn compute_mesh_node(
             Ok(mesh)
         }
         BuiltinNodeKind::CopyTransform => {
-            let input = inputs
-                .first()
-                .cloned()
-                .ok_or_else(|| "Copy/Transform requires a mesh input".to_string())?;
-            let count = param_int(params, "count", 1).max(0) as usize;
+            let input = require_input_at(inputs, 0, "Copy/Transform requires a mesh input")?;
+            let count = params.get_int("count", 1).max(0) as usize;
             if count == 0 {
                 return Ok(Mesh::default());
             }
-            let translate_step = param_vec3(params, "translate_step", [0.0, 0.0, 0.0]);
-            let rotate_step = param_vec3(params, "rotate_step_deg", [0.0, 0.0, 0.0]);
-            let scale_step = param_vec3(params, "scale_step", [0.0, 0.0, 0.0]);
+            let translate_step = params.get_vec3("translate_step", [0.0, 0.0, 0.0]);
+            let rotate_step = params.get_vec3("rotate_step_deg", [0.0, 0.0, 0.0]);
+            let scale_step = params.get_vec3("scale_step", [0.0, 0.0, 0.0]);
 
             let mut copies = Vec::with_capacity(count);
             for i in 0..count {
@@ -409,23 +403,17 @@ pub fn compute_mesh_node(
             Ok(Mesh::merge(inputs))
         }
         BuiltinNodeKind::CopyToPoints => {
-            let source = inputs
-                .first()
-                .cloned()
-                .ok_or_else(|| "Copy to Points requires a source mesh".to_string())?;
-            let template = inputs
-                .get(1)
-                .cloned()
-                .ok_or_else(|| "Copy to Points requires a template mesh".to_string())?;
+            let source = require_input_at(inputs, 0, "Copy to Points requires a source mesh")?;
+            let template = require_input_at(inputs, 1, "Copy to Points requires a template mesh")?;
 
             if template.positions.is_empty() {
                 return Err("Copy to Points requires template points".to_string());
             }
 
-            let align_to_normals = param_bool(params, "align_to_normals", true);
-            let translate = param_vec3(params, "translate", [0.0, 0.0, 0.0]);
-            let rotate_deg = param_vec3(params, "rotate_deg", [0.0, 0.0, 0.0]);
-            let scale = param_vec3(params, "scale", [1.0, 1.0, 1.0]);
+            let align_to_normals = params.get_bool("align_to_normals", true);
+            let translate = params.get_vec3("translate", [0.0, 0.0, 0.0]);
+            let rotate_deg = params.get_vec3("rotate_deg", [0.0, 0.0, 0.0]);
+            let scale = params.get_vec3("scale", [1.0, 1.0, 1.0]);
 
             let mut normals = template.normals.clone().unwrap_or_default();
             if align_to_normals && normals.len() != template.positions.len() {
@@ -464,32 +452,23 @@ pub fn compute_mesh_node(
             Ok(Mesh::merge(&copies))
         }
         BuiltinNodeKind::Scatter => {
-            let input = inputs
-                .first()
-                .cloned()
-                .ok_or_else(|| "Scatter requires a mesh input".to_string())?;
-            let count = param_int(params, "count", 200).max(0) as usize;
-            let seed = param_int(params, "seed", 1) as u32;
+            let input = require_input_at(inputs, 0, "Scatter requires a mesh input")?;
+            let count = params.get_int("count", 200).max(0) as usize;
+            let seed = params.get_int("seed", 1) as u32;
             scatter_points(&input, count, seed)
         }
         BuiltinNodeKind::Normal => {
-            let mut input = inputs
-                .first()
-                .cloned()
-                .ok_or_else(|| "Normal requires a mesh input".to_string())?;
-            let threshold = param_float(params, "threshold_deg", 60.0).clamp(0.0, 180.0);
+            let mut input = require_input_at(inputs, 0, "Normal requires a mesh input")?;
+            let threshold = params.get_float("threshold_deg", 60.0).clamp(0.0, 180.0);
             if !input.compute_normals_with_threshold(threshold) {
                 return Err("Normal node requires triangle mesh input".to_string());
             }
             Ok(input)
         }
         BuiltinNodeKind::Color => {
-            let mut input = inputs
-                .first()
-                .cloned()
-                .ok_or_else(|| "Color requires a mesh input".to_string())?;
-            let color = param_vec3(params, "color", [1.0, 1.0, 1.0]);
-            let domain = match param_int(params, "domain", 0).clamp(0, 3) {
+            let mut input = require_input_at(inputs, 0, "Color requires a mesh input")?;
+            let color = params.get_vec3("color", [1.0, 1.0, 1.0]);
+            let domain = match params.get_int("domain", 0).clamp(0, 3) {
                 0 => AttributeDomain::Point,
                 1 => AttributeDomain::Vertex,
                 2 => AttributeDomain::Primitive,
@@ -503,14 +482,11 @@ pub fn compute_mesh_node(
             Ok(input)
         }
         BuiltinNodeKind::Noise => {
-            let mut input = inputs
-                .first()
-                .cloned()
-                .ok_or_else(|| "Noise/Mountain requires a mesh input".to_string())?;
-            let amplitude = param_float(params, "amplitude", 0.2);
-            let frequency = param_float(params, "frequency", 1.0).max(0.0);
-            let seed = param_int(params, "seed", 1) as u32;
-            let offset = Vec3::from(param_vec3(params, "offset", [0.0, 0.0, 0.0]));
+            let mut input = require_input_at(inputs, 0, "Noise/Mountain requires a mesh input")?;
+            let amplitude = params.get_float("amplitude", 0.2);
+            let frequency = params.get_float("frequency", 1.0).max(0.0);
+            let seed = params.get_int("seed", 1) as u32;
+            let offset = Vec3::from(params.get_vec3("offset", [0.0, 0.0, 0.0]));
 
             if input.normals.is_none() {
                 let _ = input.compute_normals();
@@ -531,21 +507,18 @@ pub fn compute_mesh_node(
             Ok(input)
         }
         BuiltinNodeKind::AttributeMath => {
-            let mut input = inputs
-                .first()
-                .cloned()
-                .ok_or_else(|| "Attribute Math requires a mesh input".to_string())?;
-            let attr = param_string(params, "attr", "Cd");
-            let result = param_string(params, "result", attr);
-            let domain = match param_int(params, "domain", 0).clamp(0, 3) {
+            let mut input = require_input_at(inputs, 0, "Attribute Math requires a mesh input")?;
+            let attr = params.get_string("attr", "Cd");
+            let result = params.get_string("result", attr);
+            let domain = match params.get_int("domain", 0).clamp(0, 3) {
                 0 => AttributeDomain::Point,
                 1 => AttributeDomain::Vertex,
                 2 => AttributeDomain::Primitive,
                 _ => AttributeDomain::Detail,
             };
-            let op = param_int(params, "op", 0).clamp(0, 3);
-            let value_f = param_float(params, "value_f", 0.0);
-            let value_v3 = param_vec3(params, "value_v3", [0.0, 0.0, 0.0]);
+            let op = params.get_int("op", 0).clamp(0, 3);
+            let value_f = params.get_float("value_f", 0.0);
+            let value_v3 = params.get_vec3("value_v3", [0.0, 0.0, 0.0]);
 
             let attr_ref = match input.attribute(domain, attr) {
                 Some(attr_ref) => attr_ref,
@@ -580,10 +553,7 @@ pub fn compute_mesh_node(
                 crate::attributes::AttributeRef::Vec2(values) => {
                     let mut next = Vec::with_capacity(values.len());
                     for &v in values {
-                        next.push([
-                            apply_op_f(v[0], value_f, op),
-                            apply_op_f(v[1], value_f, op),
-                        ]);
+                        next.push([apply_op_f(v[0], value_f, op), apply_op_f(v[1], value_f, op)]);
                     }
                     input
                         .set_attribute(domain, result, AttributeStorage::Vec2(next))
@@ -620,11 +590,8 @@ pub fn compute_mesh_node(
             Ok(input)
         }
         BuiltinNodeKind::ObjOutput => {
-            let input = inputs
-                .first()
-                .cloned()
-                .ok_or_else(|| "OBJ Output requires a mesh input".to_string())?;
-            let path = param_string(params, "path", "output.obj");
+            let input = require_input_at(inputs, 0, "OBJ Output requires a mesh input")?;
+            let path = params.get_string("path", "output.obj");
             if path.trim().is_empty() {
                 return Err("OBJ Output requires a path".to_string());
             }
@@ -632,80 +599,17 @@ pub fn compute_mesh_node(
             Ok(input)
         }
         BuiltinNodeKind::Output => {
-            let input = inputs
-                .first()
-                .cloned()
-                .ok_or_else(|| "Output requires a mesh input".to_string())?;
+            let input = require_input_at(inputs, 0, "Output requires a mesh input")?;
             Ok(input)
         }
     }
 }
 
-fn param_vec2(params: &NodeParams, key: &str, default: [f32; 2]) -> [f32; 2] {
-    params
-        .values
-        .get(key)
-        .and_then(|value| match value {
-            ParamValue::Vec2(v) => Some(*v),
-            _ => None,
-        })
-        .unwrap_or(default)
-}
-
-fn param_float(params: &NodeParams, key: &str, default: f32) -> f32 {
-    params
-        .values
-        .get(key)
-        .and_then(|value| match value {
-            ParamValue::Float(v) => Some(*v),
-            ParamValue::Int(v) => Some(*v as f32),
-            _ => None,
-        })
-        .unwrap_or(default)
-}
-
-fn param_int(params: &NodeParams, key: &str, default: i32) -> i32 {
-    params
-        .values
-        .get(key)
-        .and_then(|value| match value {
-            ParamValue::Int(v) => Some(*v),
-            _ => None,
-        })
-        .unwrap_or(default)
-}
-
-fn param_bool(params: &NodeParams, key: &str, default: bool) -> bool {
-    params
-        .values
-        .get(key)
-        .and_then(|value| match value {
-            ParamValue::Bool(v) => Some(*v),
-            _ => None,
-        })
-        .unwrap_or(default)
-}
-
-fn param_vec3(params: &NodeParams, key: &str, default: [f32; 3]) -> [f32; 3] {
-    params
-        .values
-        .get(key)
-        .and_then(|value| match value {
-            ParamValue::Vec3(v) => Some(*v),
-            _ => None,
-        })
-        .unwrap_or(default)
-}
-
-fn param_string<'a>(params: &'a NodeParams, key: &str, default: &'a str) -> &'a str {
-    params
-        .values
-        .get(key)
-        .and_then(|value| match value {
-            ParamValue::String(v) => Some(v.as_str()),
-            _ => None,
-        })
-        .unwrap_or(default)
+fn require_input_at(inputs: &[Mesh], index: usize, message: &str) -> Result<Mesh, String> {
+    inputs
+        .get(index)
+        .cloned()
+        .ok_or_else(|| message.to_string())
 }
 
 fn apply_op_f(value: f32, rhs: f32, op: i32) -> f32 {
@@ -929,11 +833,9 @@ fn write_obj(path: &str, mesh: &Mesh) -> Result<(), String> {
                 writeln!(file, "f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}")
                     .map_err(|err| err.to_string())?;
             } else if has_uv {
-                writeln!(file, "f {a}/{a} {b}/{b} {c}/{c}")
-                    .map_err(|err| err.to_string())?;
+                writeln!(file, "f {a}/{a} {b}/{b} {c}/{c}").map_err(|err| err.to_string())?;
             } else if has_normals {
-                writeln!(file, "f {a}//{a} {b}//{b} {c}//{c}")
-                    .map_err(|err| err.to_string())?;
+                writeln!(file, "f {a}//{a} {b}//{b} {c}//{c}").map_err(|err| err.to_string())?;
             } else {
                 writeln!(file, "f {a} {b} {c}").map_err(|err| err.to_string())?;
             }

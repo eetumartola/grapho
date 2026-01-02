@@ -1,10 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-#[cfg(target_arch = "wasm32")]
-use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 use grapho_core::{evaluate_mesh_graph, Mesh, SceneSnapshot, ShadingMode};
 use render::{RenderMesh, RenderScene, ViewportDebug, ViewportShadingMode};

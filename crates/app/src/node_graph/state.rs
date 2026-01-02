@@ -30,8 +30,6 @@ pub struct NodeGraphState {
     node_ui_rects: HashMap<egui_snarl::NodeId, Rect>,
     prev_node_ui_rects: HashMap<egui_snarl::NodeId, Rect>,
     header_button_rects: HashMap<egui_snarl::NodeId, (Rect, Rect)>,
-    prev_snarl_positions: HashMap<egui_snarl::NodeId, Pos2>,
-    last_dragged_node: Option<egui_snarl::NodeId>,
     dragging_node: Option<egui_snarl::NodeId>,
     add_menu_open: bool,
     add_menu_screen_pos: Pos2,
@@ -77,8 +75,6 @@ impl Default for NodeGraphState {
             node_ui_rects: HashMap::new(),
             prev_node_ui_rects: HashMap::new(),
             header_button_rects: HashMap::new(),
-            prev_snarl_positions: HashMap::new(),
-            last_dragged_node: None,
             dragging_node: None,
             add_menu_open: false,
             add_menu_screen_pos: Pos2::new(0.0, 0.0),
@@ -131,12 +127,6 @@ impl NodeGraphState {
         self.prev_node_ui_rects = std::mem::take(&mut self.node_ui_rects);
         self.node_ui_rects.clear();
         self.header_button_rects.clear();
-        let prev_positions = self.prev_snarl_positions.clone();
-        self.prev_snarl_positions = self
-            .snarl
-            .nodes_pos_ids()
-            .map(|(id, pos, _)| (id, pos))
-            .collect();
         self.input_pin_positions.borrow_mut().clear();
         self.output_pin_positions.borrow_mut().clear();
         self.last_changed = false;
@@ -159,7 +149,6 @@ impl NodeGraphState {
             add_menu_filter: &mut self.add_menu_filter,
             add_menu_focus: &mut self.add_menu_focus,
             pending_wire: &mut self.pending_wire,
-            info_request: &mut self.info_request,
             node_menu_request: &mut self.node_menu_request,
             error_nodes: &self.error_nodes,
             error_messages: &self.error_messages,
@@ -174,18 +163,20 @@ impl NodeGraphState {
             ..SnarlStyle::default()
         };
         self.snarl.show(&mut viewer, &style, "node_graph", ui);
-        self.last_changed |= viewer.changed;
-        for (node, pos, _) in self.snarl.nodes_pos_ids() {
-            let Some(prev) = self.prev_snarl_positions.get(&node) else {
+        let viewer_changed = viewer.changed;
+        self.last_changed |= viewer_changed;
+        drop(viewer);
+        for (node, rect) in &self.node_ui_rects {
+            let Some(prev) = self.prev_node_ui_rects.get(node) else {
                 continue;
             };
-            if (*prev - pos).length_sq() > 0.5 {
+            if (rect.center() - prev.center()).length_sq() > 0.5 {
                 self.layout_changed = true;
                 break;
             }
         }
 
-        if viewer.changed {
+        if viewer_changed {
             *eval_dirty = true;
             self.needs_wire_sync = true;
         }
@@ -197,7 +188,6 @@ impl NodeGraphState {
         }
 
         self.update_drag_state(ui);
-        self.update_dragged_node_from_positions(ui, &prev_positions);
 
         if self.handle_drop_on_wire(ui, graph) {
             self.last_changed = true;
@@ -318,32 +308,6 @@ impl NodeGraphState {
         }
 
         changed
-    }
-
-    fn update_dragged_node_from_positions(
-        &mut self,
-        ui: &Ui,
-        prev_positions: &HashMap<egui_snarl::NodeId, Pos2>,
-    ) {
-        let pointer_down = ui.input(|i| i.pointer.button_down(egui::PointerButton::Primary));
-        if !pointer_down {
-            return;
-        }
-        let mut best = None;
-        let mut best_dist = 0.0;
-        for (node, pos) in &self.prev_snarl_positions {
-            let Some(prev) = prev_positions.get(node) else {
-                continue;
-            };
-            let dist = (*pos - *prev).length_sq();
-            if dist > best_dist {
-                best_dist = dist;
-                best = Some(*node);
-            }
-        }
-        if best_dist > 0.5 {
-            self.last_dragged_node = best;
-        }
     }
 
     pub fn open_add_menu(&mut self, pos: Pos2) {
@@ -566,6 +530,11 @@ impl NodeGraphState {
         self.selected_node
     }
 
+    pub fn node_at_screen_pos(&self, pos: Pos2) -> Option<NodeId> {
+        let snarl_node = self.node_at_pos(pos)?;
+        self.snarl_to_core.get(&snarl_node).copied()
+    }
+
     pub fn take_info_request(&mut self) -> Option<NodeInfoRequest> {
         self.info_request.take()
     }
@@ -719,16 +688,12 @@ impl NodeGraphState {
         if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
             return false;
         }
-        let Some(drop_pos) = ui
-            .input(|i| i.pointer.latest_pos().or_else(|| i.pointer.interact_pos()))
+        let Some(drop_pos) =
+            ui.input(|i| i.pointer.latest_pos().or_else(|| i.pointer.interact_pos()))
         else {
             return false;
         };
-        let moved_node = self
-            .last_dragged_node
-            .take()
-            .or(self.dragging_node)
-            .or_else(|| self.find_moved_node());
+        let moved_node = self.dragging_node.or_else(|| self.find_moved_node());
         if moved_node.is_none() {
             return false;
         }

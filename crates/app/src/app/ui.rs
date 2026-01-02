@@ -89,6 +89,10 @@ impl eframe::App for GraphoApp {
                     &mut self.project.settings.panels.show_inspector,
                     "Parameters",
                 );
+                ui.checkbox(
+                    &mut self.project.settings.panels.show_spreadsheet,
+                    "Spreadsheet",
+                );
                 ui.checkbox(&mut self.project.settings.panels.show_debug, "Debug");
                 ui.checkbox(&mut self.project.settings.panels.show_console, "Console");
             });
@@ -345,17 +349,24 @@ impl eframe::App for GraphoApp {
 
             ui.scope_builder(egui::UiBuilder::new().max_rect(left_rect), |ui| {
                 let full = ui.available_rect_before_wrap();
-                let separator_height = 1.0;
+                let show_sheet = self.project.settings.panels.show_spreadsheet;
+                let separator_height = if show_sheet { 1.0 } else { 0.0 };
                 let min_sheet = 140.0;
                 let min_viewport = 220.0;
                 let total_height = full.height();
-                let mut viewport_height = (total_height
-                    * self.project.settings.viewport_sheet_split.clamp(0.3, 0.9))
-                .clamp(min_viewport, (total_height - min_sheet).max(min_viewport));
-                if total_height <= min_viewport + min_sheet + separator_height {
-                    viewport_height = total_height.max(min_viewport);
-                }
-                let sheet_height = (total_height - viewport_height - separator_height).max(0.0);
+                let (viewport_height, sheet_height) = if show_sheet {
+                    let mut viewport_height = (total_height
+                        * self.project.settings.viewport_sheet_split.clamp(0.3, 0.9))
+                    .clamp(min_viewport, (total_height - min_sheet).max(min_viewport));
+                    if total_height <= min_viewport + min_sheet + separator_height {
+                        viewport_height = total_height.max(min_viewport);
+                    }
+                    let sheet_height =
+                        (total_height - viewport_height - separator_height).max(0.0);
+                    (viewport_height, sheet_height)
+                } else {
+                    (total_height.max(min_viewport), 0.0)
+                };
                 let viewport_rect = egui::Rect::from_min_size(
                     full.min,
                     egui::vec2(full.width(), viewport_height),
@@ -670,6 +681,24 @@ impl eframe::App for GraphoApp {
             self.last_node_graph_rect = Some(right_rect);
         });
 
+        let middle_down = ctx.input(|i| i.pointer.button_down(egui::PointerButton::Middle));
+        if middle_down {
+            let hover_pos = ctx.input(|i| i.pointer.hover_pos().or_else(|| i.pointer.latest_pos()));
+            if let Some(pos) = hover_pos {
+                if let Some(node_id) = self.node_graph.node_at_screen_pos(pos) {
+                    self.held_info_panel = Some(NodeInfoPanel {
+                        node_id,
+                        screen_pos: pos,
+                        open: true,
+                    });
+                } else {
+                    self.held_info_panel = None;
+                }
+            }
+        } else {
+            self.held_info_panel = None;
+        }
+
         if let Some(request) = self.node_graph.take_info_request() {
             self.info_panel = Some(NodeInfoPanel {
                 node_id: request.node_id,
@@ -678,7 +707,13 @@ impl eframe::App for GraphoApp {
             });
         }
 
-        self.show_node_info_panel(ctx);
+        let mut info_panel = self.info_panel.take();
+        self.show_node_info_panel(ctx, &mut info_panel);
+        self.info_panel = info_panel;
+
+        let mut held_info_panel = self.held_info_panel.take();
+        self.show_node_info_panel(ctx, &mut held_info_panel);
+        self.held_info_panel = held_info_panel;
 
         self.evaluate_if_needed();
     }

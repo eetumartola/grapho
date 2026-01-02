@@ -1,11 +1,7 @@
 use egui::{Align2, Color32, FontId, RichText, Ui};
 use grapho_core::{AttributeDomain, AttributeRef, AttributeType, Mesh};
 
-pub(super) fn show_spreadsheet(
-    ui: &mut Ui,
-    mesh: Option<&Mesh>,
-    domain: &mut AttributeDomain,
-) {
+pub(super) fn show_spreadsheet(ui: &mut Ui, mesh: Option<&Mesh>, domain: &mut AttributeDomain) {
     ui.horizontal(|ui| {
         ui.label(
             RichText::new("Spreadsheet")
@@ -62,56 +58,63 @@ pub(super) fn show_spreadsheet(
     let idx_width = (idx_width as f32 * char_width + 12.0).max(36.0);
     let row_height = 24.0;
 
-    egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+    egui::ScrollArea::both()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
 
-        egui::Grid::new("attribute_spreadsheet_grid")
-            .spacing([0.0, 0.0])
-            .show(ui, |ui| {
-                draw_cell(ui, "idx", idx_width, row_height, Align2::LEFT_CENTER, true, &font_id);
-                for column in &columns {
+            egui::Grid::new("attribute_spreadsheet_grid")
+                .spacing([0.0, 0.0])
+                .show(ui, |ui| {
                     draw_cell(
                         ui,
-                        &column.header,
-                        column.pixel_width(char_width),
+                        "idx",
+                        idx_width,
                         row_height,
                         Align2::LEFT_CENTER,
                         true,
                         &font_id,
                     );
-                }
-                ui.end_row();
-
-                for row in 0..max_rows {
-                    draw_cell(
-                        ui,
-                        &row.to_string(),
-                        idx_width,
-                        row_height,
-                        Align2::RIGHT_CENTER,
-                        false,
-                        &font_id,
-                    );
                     for column in &columns {
-                        let value = column
-                            .formatted
-                            .get(row)
-                            .map(String::as_str)
-                            .unwrap_or("-");
                         draw_cell(
                             ui,
-                            value,
+                            &column.header,
                             column.pixel_width(char_width),
+                            row_height,
+                            Align2::LEFT_CENTER,
+                            true,
+                            &font_id,
+                        );
+                    }
+                    ui.end_row();
+
+                    for row in 0..max_rows {
+                        draw_cell(
+                            ui,
+                            &row.to_string(),
+                            idx_width,
                             row_height,
                             Align2::RIGHT_CENTER,
                             false,
                             &font_id,
                         );
+                        for column in &columns {
+                            let value =
+                                column.formatted.get(row).map(String::as_str).unwrap_or("-");
+                            draw_cell(
+                                ui,
+                                value,
+                                column.pixel_width(char_width),
+                                row_height,
+                                Align2::RIGHT_CENTER,
+                                false,
+                                &font_id,
+                            );
+                        }
+                        ui.end_row();
                     }
-                    ui.end_row();
-                }
-            });
-    });
+                });
+        });
 }
 
 fn attr_type_label(attr_type: AttributeType) -> &'static str {
@@ -233,7 +236,9 @@ fn build_columns(
                     columns.push(Column {
                         header: format!("{}{}", attr.name, axis),
                         kind: ColumnKind::Float(
-                            (0..max_rows).map(|row| data.get(row).map(|v| v[idx])).collect(),
+                            (0..max_rows)
+                                .map(|row| data.get(row).map(|v| v[idx]))
+                                .collect(),
                         ),
                         formatted: Vec::new(),
                         width_chars: 0,
@@ -245,7 +250,9 @@ fn build_columns(
                     columns.push(Column {
                         header: format!("{}{}", attr.name, axis),
                         kind: ColumnKind::Float(
-                            (0..max_rows).map(|row| data.get(row).map(|v| v[idx])).collect(),
+                            (0..max_rows)
+                                .map(|row| data.get(row).map(|v| v[idx]))
+                                .collect(),
                         ),
                         formatted: Vec::new(),
                         width_chars: 0,
@@ -257,7 +264,9 @@ fn build_columns(
                     columns.push(Column {
                         header: format!("{}{}", attr.name, axis),
                         kind: ColumnKind::Float(
-                            (0..max_rows).map(|row| data.get(row).map(|v| v[idx])).collect(),
+                            (0..max_rows)
+                                .map(|row| data.get(row).map(|v| v[idx]))
+                                .collect(),
                         ),
                         formatted: Vec::new(),
                         width_chars: 0,
@@ -278,9 +287,7 @@ fn format_float_cell(value: f32, int_width: usize, has_negative: bool) -> String
         ""
     };
     let formatted = format!("{:.3}", value.abs());
-    let (int_part, frac_part) = formatted
-        .split_once('.')
-        .unwrap_or((&formatted, "000"));
+    let (int_part, frac_part) = formatted.split_once('.').unwrap_or((&formatted, "000"));
     let pad = int_width.saturating_sub(int_part.len());
     format!("{sign}{}{}.{frac_part}", " ".repeat(pad), int_part)
 }
@@ -328,5 +335,11 @@ fn draw_cell(
         Align2::RIGHT_CENTER => rect.right_center() - padding,
         _ => rect.center(),
     };
-    painter.text(pos, align, text, font.clone(), Color32::from_rgb(230, 230, 230));
+    painter.text(
+        pos,
+        align,
+        text,
+        font.clone(),
+        Color32::from_rgb(230, 230, 230),
+    );
 }

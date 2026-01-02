@@ -39,12 +39,7 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
             let changed = if label == "domain" {
                 param_row(ui, label, |ui| {
                     let mut changed = false;
-                    let options = [
-                        (1, "Vertex"),
-                        (0, "Point"),
-                        (2, "Primitive"),
-                        (3, "Detail"),
-                    ];
+                    let options = [(1, "Vertex"), (0, "Point"), (2, "Primitive"), (3, "Detail")];
                     let selected = options
                         .iter()
                         .find(|(value, _)| *value == v)
@@ -54,10 +49,7 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
                         .selected_text(selected)
                         .show_ui(ui, |ui| {
                             for (value, name) in options {
-                                if ui
-                                    .selectable_value(&mut v, value, name)
-                                    .changed()
-                                {
+                                if ui.selectable_value(&mut v, value, name).changed() {
                                     changed = true;
                                 }
                             }
@@ -67,12 +59,7 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
             } else if label == "op" {
                 param_row(ui, label, |ui| {
                     let mut changed = false;
-                    let options = [
-                        (0, "Add"),
-                        (1, "Subtract"),
-                        (2, "Multiply"),
-                        (3, "Divide"),
-                    ];
+                    let options = [(0, "Add"), (1, "Subtract"), (2, "Multiply"), (3, "Divide")];
                     let selected = options
                         .iter()
                         .find(|(value, _)| *value == v)
@@ -82,10 +69,7 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
                         .selected_text(selected)
                         .show_ui(ui, |ui| {
                             for (value, name) in options {
-                                if ui
-                                    .selectable_value(&mut v, value, name)
-                                    .changed()
-                                {
+                                if ui.selectable_value(&mut v, value, name).changed() {
                                     changed = true;
                                 }
                             }
@@ -141,10 +125,7 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
                 let len = v.len();
                 for (idx, item) in v.iter_mut().enumerate() {
                     if ui
-                        .add_sized(
-                            [value_width, height],
-                            egui::DragValue::new(item).speed(0.1),
-                        )
+                        .add_sized([value_width, height], egui::DragValue::new(item).speed(0.1))
                         .changed()
                     {
                         changed = true;
@@ -167,10 +148,7 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
                 let len = v.len();
                 for (idx, item) in v.iter_mut().enumerate() {
                     if ui
-                        .add_sized(
-                            [value_width, height],
-                            egui::DragValue::new(item).speed(0.1),
-                        )
+                        .add_sized([value_width, height], egui::DragValue::new(item).speed(0.1))
                         .changed()
                     {
                         changed = true;

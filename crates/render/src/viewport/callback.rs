@@ -1,21 +1,19 @@
 use std::sync::{Arc, Mutex};
 
-#[cfg(target_arch = "wasm32")]
-use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 use egui::epaint::Rect;
-use egui_wgpu::{CallbackResources, CallbackTrait};
 use egui_wgpu::wgpu::util::DeviceExt as _;
+use egui_wgpu::{CallbackResources, CallbackTrait};
 
+use super::mesh::{normals_vertices, point_cross_vertices};
+use super::pipeline::{apply_scene_to_pipeline, ensure_offscreen_targets, PipelineState, Uniforms};
+use super::{ViewportDebug, ViewportSceneState, ViewportShadingMode, ViewportStatsState};
 use crate::camera::{camera_position, camera_view_proj, CameraState};
 use glam::{Mat4, Vec3};
-use super::mesh::{normals_vertices, point_cross_vertices};
-use super::pipeline::{
-    apply_scene_to_pipeline, ensure_offscreen_targets, PipelineState, Uniforms,
-};
-use super::{ViewportDebug, ViewportSceneState, ViewportShadingMode, ViewportStatsState};
 
 pub(super) struct ViewportCallback {
     pub(super) target_format: egui_wgpu::wgpu::TextureFormat,
@@ -176,8 +174,8 @@ impl CallbackTrait for ViewportCallback {
             };
             if shadow_enabled {
                 if let Some(mesh) = &mesh {
-                    let mut shadow_pass = _egui_encoder.begin_render_pass(
-                        &egui_wgpu::wgpu::RenderPassDescriptor {
+                    let mut shadow_pass =
+                        _egui_encoder.begin_render_pass(&egui_wgpu::wgpu::RenderPassDescriptor {
                             label: Some("grapho_shadow_pass"),
                             color_attachments: &[],
                             depth_stencil_attachment: Some(
@@ -192,8 +190,7 @@ impl CallbackTrait for ViewportCallback {
                             ),
                             occlusion_query_set: None,
                             timestamp_writes: None,
-                        },
-                    );
+                        });
                     shadow_pass.set_pipeline(&pipeline.shadow_pipeline);
                     shadow_pass.set_bind_group(0, &pipeline.shadow_bind_group, &[]);
                     shadow_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
@@ -255,10 +252,9 @@ impl CallbackTrait for ViewportCallback {
 
             if self.debug.show_points || pipeline.index_count == 0 {
                 let camera_distance = (camera_pos - Vec3::from(self.camera.target)).length();
-                let desired_size = (self.debug.point_size.max(1.0) * camera_distance * 0.002)
-                    .clamp(0.0005, 2.0);
-                if pipeline.point_size < 0.0
-                    || (desired_size - pipeline.point_size).abs() > 0.0001
+                let desired_size =
+                    (self.debug.point_size.max(1.0) * camera_distance * 0.002).clamp(0.0005, 2.0);
+                if pipeline.point_size < 0.0 || (desired_size - pipeline.point_size).abs() > 0.0001
                 {
                     let point_vertices =
                         point_cross_vertices(&pipeline.point_positions, desired_size);

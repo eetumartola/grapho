@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-#[cfg(target_arch = "wasm32")]
-use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 use egui::epaint::{PaintCallback, Rect};
 use egui_wgpu::Callback;

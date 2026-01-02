@@ -213,8 +213,13 @@ fn build_project_from_plan(plan: &HeadlessPlan) -> Result<Project, String> {
             grapho_core::PinKind::Output,
         )
         .ok_or_else(|| format!("unknown output pin {}", link.from.pin))?;
-        let to_pin = find_pin_id(&project.graph, *to_node, &link.to.pin, grapho_core::PinKind::Input)
-            .ok_or_else(|| format!("unknown input pin {}", link.to.pin))?;
+        let to_pin = find_pin_id(
+            &project.graph,
+            *to_node,
+            &link.to.pin,
+            grapho_core::PinKind::Input,
+        )
+        .ok_or_else(|| format!("unknown input pin {}", link.to.pin))?;
 
         project
             .graph

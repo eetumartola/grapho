@@ -2,13 +2,13 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicU8;
 use std::sync::Arc;
 
-#[cfg(target_arch = "wasm32")]
-use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
-use grapho_core::{MeshEvalState, Project};
 use eframe::egui;
+use grapho_core::{MeshEvalState, Project};
 use render::{RenderScene, ViewportRenderer};
 use tracing_subscriber::filter::LevelFilter;
 
@@ -23,8 +23,8 @@ mod ui;
 mod undo;
 mod viewport;
 
-pub(crate) use logging::ConsoleBuffer;
 pub(crate) use logging::setup_tracing;
+pub(crate) use logging::ConsoleBuffer;
 
 use logging::level_filter_to_u8;
 use node_info::NodeInfoPanel;
@@ -48,6 +48,7 @@ pub(crate) struct GraphoApp {
     last_node_graph_rect: Option<egui::Rect>,
     last_selected_node: Option<grapho_core::NodeId>,
     info_panel: Option<NodeInfoPanel>,
+    held_info_panel: Option<NodeInfoPanel>,
     undo_stack: UndoStack,
     pending_undo: Option<UndoSnapshot>,
     spreadsheet_domain: grapho_core::AttributeDomain,
@@ -79,6 +80,7 @@ impl GraphoApp {
             last_node_graph_rect: None,
             last_selected_node: None,
             info_panel: None,
+            held_info_panel: None,
             undo_stack: UndoStack::new(),
             pending_undo: None,
             spreadsheet_domain: grapho_core::AttributeDomain::Point,
@@ -90,8 +92,10 @@ impl GraphoApp {
             return;
         }
 
-        self.log_level_state
-            .store(level_filter_to_u8(new_level), std::sync::atomic::Ordering::Relaxed);
+        self.log_level_state.store(
+            level_filter_to_u8(new_level),
+            std::sync::atomic::Ordering::Relaxed,
+        );
         self.log_level = new_level;
     }
 

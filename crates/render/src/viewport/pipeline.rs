@@ -7,8 +7,8 @@ use crate::scene::RenderScene;
 
 use super::mesh::{
     bounds_from_positions, bounds_vertices, build_vertices, cube_mesh, grid_and_axes,
-    normals_vertices, point_cross_vertices, wireframe_vertices, LineVertex, Vertex, LINE_ATTRIBUTES,
-    VERTEX_ATTRIBUTES,
+    normals_vertices, point_cross_vertices, wireframe_vertices, LineVertex, Vertex,
+    LINE_ATTRIBUTES, VERTEX_ATTRIBUTES,
 };
 
 pub(super) const DEPTH_FORMAT: egui_wgpu::wgpu::TextureFormat =
@@ -657,8 +657,7 @@ fn fs_blit(input: BlitOut) -> @location(0) vec4<f32> {
             });
         let (grid_vertices, axes_vertices) = grid_and_axes();
         let point_count = mesh.vertices.len() as u32;
-        let point_positions: Vec<[f32; 3]> =
-            mesh.vertices.iter().map(|v| v.position).collect();
+        let point_positions: Vec<[f32; 3]> = mesh.vertices.iter().map(|v| v.position).collect();
         let point_size = 0.1;
         let point_lines = point_cross_vertices(&point_positions, point_size);
         let point_buffer =
@@ -750,8 +749,7 @@ pub(super) fn apply_scene_to_pipeline(
         device.create_buffer_init(&egui_wgpu::wgpu::util::BufferInitDescriptor {
             label: Some("grapho_normals_vertices"),
             contents: bytemuck::cast_slice(&normals_vertices),
-            usage: egui_wgpu::wgpu::BufferUsages::VERTEX
-                | egui_wgpu::wgpu::BufferUsages::COPY_DST,
+            usage: egui_wgpu::wgpu::BufferUsages::VERTEX | egui_wgpu::wgpu::BufferUsages::COPY_DST,
         });
     pipeline.normals_count = normals_vertices.len() as u32;
 
@@ -829,10 +827,7 @@ fn create_offscreen_targets(
 fn create_shadow_targets(
     device: &egui_wgpu::wgpu::Device,
     size: u32,
-) -> (
-    egui_wgpu::wgpu::Texture,
-    egui_wgpu::wgpu::TextureView,
-) {
+) -> (egui_wgpu::wgpu::Texture, egui_wgpu::wgpu::TextureView) {
     let size = size.max(1);
     let extent = egui_wgpu::wgpu::Extent3d {
         width: size,
@@ -850,7 +845,8 @@ fn create_shadow_targets(
             | egui_wgpu::wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     });
-    let shadow_view = shadow_texture.create_view(&egui_wgpu::wgpu::TextureViewDescriptor::default());
+    let shadow_view =
+        shadow_texture.create_view(&egui_wgpu::wgpu::TextureViewDescriptor::default());
     (shadow_texture, shadow_view)
 }
 

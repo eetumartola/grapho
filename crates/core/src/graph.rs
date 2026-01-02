@@ -44,7 +44,10 @@ impl Graph {
     }
 
     pub fn display_node(&self) -> Option<NodeId> {
-        self.nodes.values().find(|node| node.display).map(|node| node.id)
+        self.nodes
+            .values()
+            .find(|node| node.display)
+            .map(|node| node.id)
     }
 
     pub fn template_nodes(&self) -> Vec<NodeId> {
@@ -370,6 +373,69 @@ pub struct Node {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NodeParams {
     pub values: BTreeMap<String, ParamValue>,
+}
+
+impl NodeParams {
+    pub fn get_vec2(&self, key: &str, default: [f32; 2]) -> [f32; 2] {
+        self.values
+            .get(key)
+            .and_then(|value| match value {
+                ParamValue::Vec2(v) => Some(*v),
+                _ => None,
+            })
+            .unwrap_or(default)
+    }
+
+    pub fn get_vec3(&self, key: &str, default: [f32; 3]) -> [f32; 3] {
+        self.values
+            .get(key)
+            .and_then(|value| match value {
+                ParamValue::Vec3(v) => Some(*v),
+                _ => None,
+            })
+            .unwrap_or(default)
+    }
+
+    pub fn get_float(&self, key: &str, default: f32) -> f32 {
+        self.values
+            .get(key)
+            .and_then(|value| match value {
+                ParamValue::Float(v) => Some(*v),
+                ParamValue::Int(v) => Some(*v as f32),
+                _ => None,
+            })
+            .unwrap_or(default)
+    }
+
+    pub fn get_int(&self, key: &str, default: i32) -> i32 {
+        self.values
+            .get(key)
+            .and_then(|value| match value {
+                ParamValue::Int(v) => Some(*v),
+                _ => None,
+            })
+            .unwrap_or(default)
+    }
+
+    pub fn get_bool(&self, key: &str, default: bool) -> bool {
+        self.values
+            .get(key)
+            .and_then(|value| match value {
+                ParamValue::Bool(v) => Some(*v),
+                _ => None,
+            })
+            .unwrap_or(default)
+    }
+
+    pub fn get_string<'a>(&'a self, key: &str, default: &'a str) -> &'a str {
+        self.values
+            .get(key)
+            .and_then(|value| match value {
+                ParamValue::String(v) => Some(v.as_str()),
+                _ => None,
+            })
+            .unwrap_or(default)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
