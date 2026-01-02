@@ -466,6 +466,23 @@ impl eframe::App for GraphoApp {
                                             if entry.cache_hit { " (cache)" } else { "" }
                                         ));
                                     }
+                                    if !report.dirty.is_empty() {
+                                        ui.separator();
+                                        ui.label(format!("Dirty nodes: {}", report.dirty.len()));
+                                        for entry in &report.dirty {
+                                            let reason = match entry.reason {
+                                                grapho_core::DirtyReason::NewNode => "new",
+                                                grapho_core::DirtyReason::ParamChanged => "param",
+                                                grapho_core::DirtyReason::UpstreamChanged => {
+                                                    "upstream"
+                                                }
+                                                grapho_core::DirtyReason::ParamAndUpstreamChanged => {
+                                                    "param+upstream"
+                                                }
+                                            };
+                                            ui.label(format!("{:?}: {}", entry.node, reason));
+                                        }
+                                    }
                                 }
 
                                 egui::ComboBox::from_label("Log level")
@@ -663,6 +680,11 @@ impl eframe::App for GraphoApp {
             }
 
             if params_ratio > 0.0 {
+                ui.painter().rect_filled(
+                    params_rect,
+                    0.0,
+                    egui::Color32::from_rgb(55, 55, 55),
+                );
                 ui.scope_builder(egui::UiBuilder::new().max_rect(params_rect), |ui| {
                     let frame = egui::Frame::NONE
                         .fill(egui::Color32::from_rgb(55, 55, 55))

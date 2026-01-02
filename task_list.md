@@ -432,7 +432,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 * Multi-select, delete, duplicate
 * Basic keyboard shortcuts: delete, ctrl+z/y (if undo exists)
-* Drop node on wire to insert between existing connections (pending: still not inserting)
+* Drop node on wire to insert between existing connections (done)
 * Dropped wire opens add-node menu and auto-connects on create (done)
   **Acceptance**
 * Editing feels stable and predictable at ~200 nodes
@@ -491,7 +491,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### I2. Dirty view
 
 **Depends:** E3
-**Status:** pending
+**Status:** done
 
 * Show which nodes are dirty and why (param changed vs upstream)
   **Acceptance**
@@ -534,6 +534,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
   **Acceptance**
 * Runs in browser: viewport draws + node editor operates
 * Basic save/load via browser download/upload or local storage
+* Static hosting requires correct wasm MIME type (`application/wasm`)
 
 ---
 

@@ -12,8 +12,8 @@ pub use attributes::{
     MeshAttributes,
 };
 pub use eval::{
-    evaluate_from, evaluate_from_with, EvalCacheStats, EvalError, EvalNodeReport, EvalReport,
-    EvalState,
+    evaluate_from, evaluate_from_with, DirtyNodeReport, DirtyReason, EvalCacheStats, EvalError,
+    EvalNodeReport, EvalReport, EvalState,
 };
 pub use graph::{
     Graph, GraphError, Link, LinkId, Node, NodeDefinition, NodeId, NodeParams, ParamValue, Pin,

@@ -14,6 +14,7 @@ It should initially have a 3D viewport and a DAG node view, with options for fut
 ### Node editor
 
 * **egui-snarl** for the node canvas and interaction model (0.9+)
+* Custom node context menu for RMB actions (node info, delete)
 
 ### Rendering
 
@@ -86,6 +87,7 @@ It should initially have a 3D viewport and a DAG node view, with options for fut
 * Integrates `egui-snarl` graph view to `core::Graph`
 * Triggers evaluation and feeds `SceneSnapshot` to renderer
 * Debug options UI -> toggles in renderer + core stats
+* Node info popups on middle-click or RMB menu
 
 ### 4) `io` crate (optional, can start in core)
 
@@ -238,6 +240,9 @@ Deliverables:
   * `Subdivide` (simple)
   * `NormalCompute` (if needed)
   * `Output`
+  * `Color`
+  * `Scatter`
+  * `File` (OBJ)
 
 ### Milestone 5 " Graph drives viewport
 
@@ -298,7 +303,10 @@ Deliverables:
 * Camera controls: orbit/pan/dolly wired to render.
 * Node graph integration, inspector, error badges/tooltips, output invalidation: in place.
 * Headless CLI mode for plan -> project JSON exists.
-* Built-in nodes implemented: Box, Grid, Sphere, Transform, Merge, Copy to Points, Scatter, Normal, Output.
+* Built-in nodes implemented: Box, Grid, Sphere, Transform, Merge, Copy to Points, Scatter, Normal, Color, File (OBJ), Output.
 * Add-node search menu works (Tab or context menu).
 * Node graph code split into smaller modules for maintainability.
 * Core mesh attributes now support Houdini-style domains (point/vertex/primitive/detail) with P/N special-cased.
+* Node info panel shows counts/bounds/attributes; RMB menu restored for node actions.
+* Web build is functional via `build_web.ps1` + wasm-bindgen output (static server required).
+* Debug panel shows dirty-node reasons (param vs upstream changes).

@@ -23,6 +23,9 @@ pub struct EvalState {
 #[derive(Debug, Default)]
 struct NodeEvalState {
     last_signature: u64,
+    last_param_version: u64,
+    last_upstream_signature: u64,
+    initialized: bool,
     output_version: u64,
 }
 
@@ -33,6 +36,7 @@ pub struct EvalReport {
     pub cache_hits: u64,
     pub cache_misses: u64,
     pub node_reports: BTreeMap<NodeId, EvalNodeReport>,
+    pub dirty: Vec<DirtyNodeReport>,
     pub errors: Vec<EvalError>,
     pub output_valid: bool,
 }
@@ -44,6 +48,20 @@ pub struct EvalNodeReport {
     pub cache_hit: bool,
     pub output_version: u64,
     pub error: Option<EvalError>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DirtyReason {
+    NewNode,
+    ParamChanged,
+    UpstreamChanged,
+    ParamAndUpstreamChanged,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DirtyNodeReport {
+    pub node: NodeId,
+    pub reason: DirtyReason,
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +122,7 @@ where
             upstream_versions.push((*upstream_id, upstream_state.output_version));
         }
 
+        let upstream_signature = hash_upstream(&upstream_versions);
         let signature = hash_signature(node.param_version, &upstream_versions);
         let (last_signature, output_version) = {
             let node_state = state.node_state_mut(*node_id);
@@ -135,11 +154,39 @@ where
             continue;
         }
 
+        let dirty_reason = {
+            let node_state = state.node_state_mut(*node_id);
+            if !node_state.initialized {
+                Some(DirtyReason::NewNode)
+            } else if last_signature == signature {
+                None
+            } else {
+                let param_changed = node.param_version != node_state.last_param_version;
+                let upstream_changed = upstream_signature != node_state.last_upstream_signature;
+                match (param_changed, upstream_changed) {
+                    (true, true) => Some(DirtyReason::ParamAndUpstreamChanged),
+                    (true, false) => Some(DirtyReason::ParamChanged),
+                    (false, true) => Some(DirtyReason::UpstreamChanged),
+                    (false, false) => None,
+                }
+            }
+        };
+        if let Some(reason) = dirty_reason {
+            report.dirty.push(DirtyNodeReport {
+                node: *node_id,
+                reason,
+            });
+        }
+
         if last_signature == signature {
             report.cache_hits += 1;
             state.stats.hits += 1;
             node_report.cache_hit = true;
             node_report.output_version = output_version;
+            let node_state = state.node_state_mut(*node_id);
+            node_state.last_param_version = node.param_version;
+            node_state.last_upstream_signature = upstream_signature;
+            node_state.initialized = true;
             report.node_reports.insert(*node_id, node_report);
             continue;
         }
@@ -152,6 +199,9 @@ where
             Ok(()) => {
                 let node_state = state.node_state_mut(*node_id);
                 node_state.last_signature = signature;
+                node_state.last_param_version = node.param_version;
+                node_state.last_upstream_signature = upstream_signature;
+                node_state.initialized = true;
                 node_state.output_version = node_state.output_version.wrapping_add(1);
                 node_report.output_version = node_state.output_version;
                 report.cache_misses += 1;
@@ -179,6 +229,12 @@ where
 fn hash_signature(param_version: u64, upstream_versions: &[(NodeId, u64)]) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     param_version.hash(&mut hasher);
+    upstream_versions.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn hash_upstream(upstream_versions: &[(NodeId, u64)]) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
     upstream_versions.hash(&mut hasher);
     hasher.finish()
 }

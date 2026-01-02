@@ -264,13 +264,13 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
             return;
         };
         if self.selected_node.as_ref() == Some(&core_id) {
-            let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(235, 200, 60));
+            let stroke = egui::Stroke::new(4.0, egui::Color32::from_rgb(235, 200, 60));
             ui.painter()
                 .rect_stroke(ui_rect, 6.0, stroke, egui::StrokeKind::Inside);
         }
 
         if self.error_nodes.contains(&core_id) {
-            let stroke = egui::Stroke::new(1.5, egui::Color32::from_rgb(220, 60, 60));
+            let stroke = egui::Stroke::new(3.0, egui::Color32::from_rgb(220, 60, 60));
             ui.painter()
                 .rect_stroke(ui_rect, 6.0, stroke, egui::StrokeKind::Inside);
 
