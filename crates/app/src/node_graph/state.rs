@@ -29,7 +29,7 @@ pub struct NodeGraphState {
     selected_node: Option<NodeId>,
     node_ui_rects: HashMap<egui_snarl::NodeId, Rect>,
     prev_node_ui_rects: HashMap<egui_snarl::NodeId, Rect>,
-    header_button_rects: HashMap<egui_snarl::NodeId, (Rect, Rect)>,
+    header_button_rects: HashMap<egui_snarl::NodeId, HeaderButtonRects>,
     dragging_node: Option<egui_snarl::NodeId>,
     add_menu_open: bool,
     add_menu_screen_pos: Pos2,
@@ -38,6 +38,7 @@ pub struct NodeGraphState {
     add_menu_focus: bool,
     pending_wire: Option<PendingWire>,
     info_request: Option<NodeInfoRequest>,
+    wrangle_help_request: Option<Pos2>,
     graph_transform: GraphTransformState,
     input_pin_positions: Rc<RefCell<HashMap<InPinId, Pos2>>>,
     output_pin_positions: Rc<RefCell<HashMap<OutPinId, Pos2>>>,
@@ -83,6 +84,7 @@ impl Default for NodeGraphState {
             add_menu_focus: false,
             pending_wire: None,
             info_request: None,
+            wrangle_help_request: None,
             graph_transform: GraphTransformState {
                 to_global: egui::emath::TSTransform::IDENTITY,
                 valid: false,
@@ -104,6 +106,13 @@ impl Default for NodeGraphState {
 pub(super) struct NodeMenuRequest {
     pub(super) node_id: NodeId,
     pub(super) screen_pos: Pos2,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct HeaderButtonRects {
+    pub(super) display: Rect,
+    pub(super) template: Rect,
+    pub(super) help: Option<Rect>,
 }
 
 #[derive(Clone, Default, PartialEq)]
@@ -150,6 +159,7 @@ impl NodeGraphState {
             add_menu_focus: &mut self.add_menu_focus,
             pending_wire: &mut self.pending_wire,
             node_menu_request: &mut self.node_menu_request,
+            wrangle_help_request: &mut self.wrangle_help_request,
             error_nodes: &self.error_nodes,
             error_messages: &self.error_messages,
             changed: false,
@@ -537,6 +547,10 @@ impl NodeGraphState {
 
     pub fn take_info_request(&mut self) -> Option<NodeInfoRequest> {
         self.info_request.take()
+    }
+
+    pub fn take_wrangle_help_request(&mut self) -> Option<Pos2> {
+        self.wrangle_help_request.take()
     }
 
     fn show_add_menu(&mut self, ui: &mut Ui, graph: &mut Graph) -> bool {

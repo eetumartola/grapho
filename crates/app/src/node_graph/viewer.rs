@@ -9,7 +9,7 @@ use egui_snarl::{InPinId, OutPinId, Snarl};
 use grapho_core::{default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinId};
 
 use super::menu::builtin_menu_items;
-use super::state::{GraphTransformState, PendingWire, SnarlNode};
+use super::state::{GraphTransformState, HeaderButtonRects, PendingWire, SnarlNode};
 use super::utils::pin_color;
 
 pub(super) struct NodeGraphViewer<'a> {
@@ -19,7 +19,7 @@ pub(super) struct NodeGraphViewer<'a> {
     pub(super) next_pos: &'a mut Pos2,
     pub(super) selected_node: &'a mut Option<NodeId>,
     pub(super) node_rects: &'a mut HashMap<egui_snarl::NodeId, Rect>,
-    pub(super) header_button_rects: &'a mut HashMap<egui_snarl::NodeId, (Rect, Rect)>,
+    pub(super) header_button_rects: &'a mut HashMap<egui_snarl::NodeId, HeaderButtonRects>,
     pub(super) graph_transform: &'a mut GraphTransformState,
     pub(super) input_pin_positions: Rc<RefCell<HashMap<InPinId, Pos2>>>,
     pub(super) output_pin_positions: Rc<RefCell<HashMap<OutPinId, Pos2>>>,
@@ -30,6 +30,7 @@ pub(super) struct NodeGraphViewer<'a> {
     pub(super) add_menu_focus: &'a mut bool,
     pub(super) pending_wire: &'a mut Option<PendingWire>,
     pub(super) node_menu_request: &'a mut Option<super::state::NodeMenuRequest>,
+    pub(super) wrangle_help_request: &'a mut Option<Pos2>,
     pub(super) error_nodes: &'a HashSet<NodeId>,
     pub(super) error_messages: &'a HashMap<NodeId, String>,
     pub(super) changed: bool,
@@ -147,20 +148,22 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         let height = (icon_size + 6.0).max(base_height);
         let button_gap = 4.0;
         let right_pad = 6.0;
-        let button_width = icon_size * 2.0 + button_gap;
         let left_pad = 8.0;
         let min_title_width = 32.0;
+        let core_id = self.core_node_id(snarl, node);
+        let (display_active, template_active, show_help) = core_id
+            .and_then(|id| self.graph.node(id))
+            .map(|node| (node.display, node.template, node.name == "Wrangle"))
+            .unwrap_or((false, false, false));
+
+        let button_count = if show_help { 3usize } else { 2usize };
+        let button_width =
+            icon_size * button_count as f32 + button_gap * (button_count.saturating_sub(1)) as f32;
         let desired_width =
             (title_width.max(min_title_width) + left_pad + button_width + right_pad).max(24.0);
         let width = ui.available_width().max(desired_width);
         let (rect, _response) =
             ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-        let core_id = self.core_node_id(snarl, node);
-        let (display_active, template_active) = core_id
-            .and_then(|id| self.graph.node(id))
-            .map(|node| (node.display, node.template))
-            .unwrap_or((false, false));
-
         let right_min_x = (rect.right() - right_pad - button_width).max(rect.left());
         let left_rect = Rect::from_min_max(rect.min, Pos2::new(right_min_x, rect.bottom()));
 
@@ -173,8 +176,22 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
             Pos2::new(display_rect.left() - button_gap - icon_size, icon_y),
             egui::vec2(icon_size, icon_size),
         );
-        self.header_button_rects
-            .insert(node, (display_rect, template_rect));
+        let help_rect = if show_help {
+            Some(Rect::from_min_size(
+                Pos2::new(template_rect.left() - button_gap - icon_size, icon_y),
+                egui::vec2(icon_size, icon_size),
+            ))
+        } else {
+            None
+        };
+        self.header_button_rects.insert(
+            node,
+            HeaderButtonRects {
+                display: display_rect,
+                template: template_rect,
+                help: help_rect,
+            },
+        );
 
         let display_response = ui.interact(
             display_rect,
@@ -186,8 +203,18 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
             ui.make_persistent_id(("node-template", node)),
             egui::Sense::hover(),
         );
+        let help_response = help_rect.map(|rect| {
+            ui.interact(
+                rect,
+                ui.make_persistent_id(("node-help", node)),
+                egui::Sense::hover(),
+            )
+        });
         display_response.on_hover_text("Display");
         template_response.on_hover_text("Template");
+        if let Some(response) = help_response {
+            response.on_hover_text("Wrangle help");
+        }
 
         let drag_response = ui.interact(
             left_rect,
@@ -227,6 +254,7 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         } else {
             inactive_fill
         };
+        let help_fill = inactive_fill;
         let display_text = if display_active {
             Color32::WHITE
         } else {
@@ -251,6 +279,22 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
             egui::Stroke::new(1.0, inactive_stroke),
             egui::StrokeKind::Inside,
         );
+        if let Some(rect) = help_rect {
+            painter.rect_filled(rect, 3.0, help_fill);
+            painter.rect_stroke(
+                rect,
+                3.0,
+                egui::Stroke::new(1.0, inactive_stroke),
+                egui::StrokeKind::Inside,
+            );
+            painter.text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                "?",
+                FontId::proportional(icon_size * 0.7),
+                inactive_text,
+            );
+        }
         painter.text(
             display_rect.center(),
             Align2::CENTER_CENTER,
@@ -436,24 +480,27 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
                 None
             }
         });
-        if let (Some(pos), Some((display_rect, template_rect))) =
-            (clicked_pos, self.header_button_rects.get(&node))
-        {
+        if let (Some(pos), Some(buttons)) = (clicked_pos, self.header_button_rects.get(&node)) {
+            let pos_screen = pos;
             let pos = if self.graph_transform.valid {
                 self.graph_transform.to_global.inverse() * pos
             } else {
                 pos
             };
-            if display_rect.contains(pos) {
+            if buttons.display.contains(pos) {
                 if self.graph.toggle_display_node(core_id).is_ok() {
                     self.changed = true;
                 }
                 return;
             }
-            if template_rect.contains(pos) {
+            if buttons.template.contains(pos) {
                 if self.graph.toggle_template_node(core_id).is_ok() {
                     self.changed = true;
                 }
+                return;
+            }
+            if buttons.help.is_some_and(|rect| rect.contains(pos)) {
+                *self.wrangle_help_request = Some(pos_screen);
                 return;
             }
         }
@@ -469,11 +516,11 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
                 }
             });
         let blocked = pointer_pos.is_some_and(|pos| {
-            self.header_button_rects
-                .get(&node)
-                .is_some_and(|(display_rect, template_rect)| {
-                    display_rect.contains(pos) || template_rect.contains(pos)
-                })
+            self.header_button_rects.get(&node).is_some_and(|buttons| {
+                buttons.display.contains(pos)
+                    || buttons.template.contains(pos)
+                    || buttons.help.is_some_and(|rect| rect.contains(pos))
+            })
         });
         let response = ui.interact(
             ui_rect,

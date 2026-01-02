@@ -60,6 +60,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 * Implement panels: Viewport, Node Graph, Inspector, Debug, Console
 * Split ratio between Viewport and Node Graph is configurable in settings (percentage)
+* Top bar toggles for Parameters/Spreadsheet/Debug/Console
   **Acceptance**
 * Viewport and Node Graph visible and resizable via the split ratio
 * Split ratio persists in settings
@@ -330,14 +331,6 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 ### F5. Subdivide node (simple)
 
-**Depends:** F1, E1
-**Status:** pending
-
-* Start with a straightforward scheme (even naive)
-  **Acceptance**
-* Subdivision increases triangle count predictably
-* Doesn't explode memory on moderate settings (guardrails)
-
 ### F6. Output node (final)
 
 **Depends:** E1
@@ -454,6 +447,19 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Writes output attribute with correct domain + size
 * Errors clearly when inputs are missing or mismatched
 
+### F18. Wrangle node (simple attribute language)
+
+**Depends:** F10, E1
+**Status:** pending
+
+* Minimal expression language for attribute math (assignment + arithmetic + basic functions)
+* Attribute binding for read/write; create attributes on first write
+* Domain mode parameter: point/vertex/primitive/detail
+  **Acceptance**
+* Can read/write `@Cd`, `@P`, `@N` (or equivalent) and create new attributes
+* Supports `+ - * /`, unary negation, and basic functions (`sin`, `cos`, `pow`, `lerp`)
+* Domain mode controls element iteration
+
 ---
 
 ## Epic G " egui-snarl node editor integration
@@ -501,6 +507,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Drop node on wire to insert between existing connections (done)
 * Dropped wire opens add-node menu and auto-connects on create (done)
 * Display/template flags in node header (Houdini-style)
+* Node info panel: hold MMB to show, RMB menu opens persistent panel
   **Acceptance**
 * Editing feels stable and predictable at ~200 nodes
 * Only one node can be the display target at a time
@@ -529,6 +536,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Split viewport area with draggable divider
 * Spreadsheet shows attributes for selected node
 * Domain toggle: vertex/point/prim/detail
+* Spreadsheet visibility toggle in top bar
   **Acceptance**
 * Spreadsheet updates on node selection
 * Domain filter switches the attribute list correctly
@@ -640,6 +648,10 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 
 * Build to wasm (eframe path)
 * Use WGSL shaders path for web
+* Web UX notes:
+  * Add in-app download/upload controls for project save/load
+  * Provide a short note about wasm MIME type + static hosting
+  * Disable/replace native file dialogs in web builds
   **Acceptance**
 * Runs in browser: viewport draws + node editor operates
 * Basic save/load via browser download/upload or local storage

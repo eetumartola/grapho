@@ -6,6 +6,7 @@ mod mesh_eval;
 mod nodes_builtin;
 mod project;
 mod scene;
+mod wrangle;
 
 pub use attributes::{
     AttributeDomain, AttributeError, AttributeInfo, AttributeRef, AttributeStorage, AttributeType,

@@ -74,6 +74,11 @@ pub(super) fn builtin_menu_items() -> Vec<MenuItem> {
             category: "Operators",
         },
         MenuItem {
+            kind: BuiltinNodeKind::Wrangle,
+            name: "Wrangle",
+            category: "Operators",
+        },
+        MenuItem {
             kind: BuiltinNodeKind::ObjOutput,
             name: "OBJ Output",
             category: "Outputs",

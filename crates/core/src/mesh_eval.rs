@@ -71,6 +71,7 @@ pub fn evaluate_mesh_graph(
             | crate::nodes_builtin::BuiltinNodeKind::Color
             | crate::nodes_builtin::BuiltinNodeKind::Noise
             | crate::nodes_builtin::BuiltinNodeKind::AttributeMath
+            | crate::nodes_builtin::BuiltinNodeKind::Wrangle
             | crate::nodes_builtin::BuiltinNodeKind::ObjOutput
             | crate::nodes_builtin::BuiltinNodeKind::Output => {
                 if let Some(mesh) = input_meshes.first().and_then(|mesh| mesh.clone()) {

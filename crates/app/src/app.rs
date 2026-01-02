@@ -22,6 +22,7 @@ mod spreadsheet;
 mod ui;
 mod undo;
 mod viewport;
+mod wrangle_help;
 
 pub(crate) use logging::setup_tracing;
 pub(crate) use logging::ConsoleBuffer;
@@ -29,6 +30,7 @@ pub(crate) use logging::ConsoleBuffer;
 use logging::level_filter_to_u8;
 use node_info::NodeInfoPanel;
 use undo::{UndoSnapshot, UndoStack};
+use wrangle_help::WrangleHelpPanel;
 
 pub(crate) struct GraphoApp {
     project: Project,
@@ -49,6 +51,7 @@ pub(crate) struct GraphoApp {
     last_selected_node: Option<grapho_core::NodeId>,
     info_panel: Option<NodeInfoPanel>,
     held_info_panel: Option<NodeInfoPanel>,
+    wrangle_help_panel: Option<WrangleHelpPanel>,
     undo_stack: UndoStack,
     pending_undo: Option<UndoSnapshot>,
     spreadsheet_domain: grapho_core::AttributeDomain,
@@ -81,6 +84,7 @@ impl GraphoApp {
             last_selected_node: None,
             info_panel: None,
             held_info_panel: None,
+            wrangle_help_panel: None,
             undo_stack: UndoStack::new(),
             pending_undo: None,
             spreadsheet_domain: grapho_core::AttributeDomain::Point,

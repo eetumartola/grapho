@@ -8,6 +8,7 @@ use tracing::warn;
 use crate::attributes::{AttributeDomain, AttributeStorage};
 use crate::graph::{NodeDefinition, NodeParams, ParamValue, PinDefinition, PinType};
 use crate::mesh::{make_box, make_grid, make_uv_sphere, Mesh};
+use crate::wrangle::apply_wrangle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuiltinNodeKind {
@@ -24,6 +25,7 @@ pub enum BuiltinNodeKind {
     Color,
     Noise,
     AttributeMath,
+    Wrangle,
     ObjOutput,
     Output,
 }
@@ -44,6 +46,7 @@ impl BuiltinNodeKind {
             BuiltinNodeKind::Color => "Color",
             BuiltinNodeKind::Noise => "Noise/Mountain",
             BuiltinNodeKind::AttributeMath => "Attribute Math",
+            BuiltinNodeKind::Wrangle => "Wrangle",
             BuiltinNodeKind::ObjOutput => "OBJ Output",
             BuiltinNodeKind::Output => "Output",
         }
@@ -65,6 +68,7 @@ pub fn builtin_kind_from_name(name: &str) -> Option<BuiltinNodeKind> {
         "Color" => Some(BuiltinNodeKind::Color),
         "Noise/Mountain" => Some(BuiltinNodeKind::Noise),
         "Attribute Math" => Some(BuiltinNodeKind::AttributeMath),
+        "Wrangle" => Some(BuiltinNodeKind::Wrangle),
         "OBJ Output" => Some(BuiltinNodeKind::ObjOutput),
         "Output" => Some(BuiltinNodeKind::Output),
         _ => None,
@@ -86,6 +90,7 @@ pub fn builtin_definitions() -> Vec<NodeDefinition> {
         node_definition(BuiltinNodeKind::Color),
         node_definition(BuiltinNodeKind::Noise),
         node_definition(BuiltinNodeKind::AttributeMath),
+        node_definition(BuiltinNodeKind::Wrangle),
         node_definition(BuiltinNodeKind::ObjOutput),
         node_definition(BuiltinNodeKind::Output),
     ]
@@ -198,6 +203,12 @@ pub fn node_definition(kind: BuiltinNodeKind) -> NodeDefinition {
             inputs: vec![mesh_in()],
             outputs: vec![mesh_out()],
         },
+        BuiltinNodeKind::Wrangle => NodeDefinition {
+            name: kind.name().to_string(),
+            category: "Operators".to_string(),
+            inputs: vec![mesh_in()],
+            outputs: vec![mesh_out()],
+        },
         BuiltinNodeKind::ObjOutput => NodeDefinition {
             name: kind.name().to_string(),
             category: "Outputs".to_string(),
@@ -287,6 +298,13 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
             values.insert("op".to_string(), ParamValue::Int(0));
             values.insert("value_f".to_string(), ParamValue::Float(0.0));
             values.insert("value_v3".to_string(), ParamValue::Vec3([1.0, 1.0, 1.0]));
+        }
+        BuiltinNodeKind::Wrangle => {
+            values.insert("mode".to_string(), ParamValue::Int(0));
+            values.insert(
+                "code".to_string(),
+                ParamValue::String("@Cd = vec3(1.0, 1.0, 1.0);".to_string()),
+            );
         }
         BuiltinNodeKind::ObjOutput => {
             values.insert(
@@ -586,6 +604,20 @@ pub fn compute_mesh_node(
                         .set_attribute(domain, result, AttributeStorage::Vec4(next))
                         .map_err(|err| format!("Attribute Math error: {:?}", err))?;
                 }
+            }
+            Ok(input)
+        }
+        BuiltinNodeKind::Wrangle => {
+            let mut input = require_input_at(inputs, 0, "Wrangle requires a mesh input")?;
+            let code = params.get_string("code", "");
+            let domain = match params.get_int("mode", 0).clamp(0, 3) {
+                0 => AttributeDomain::Point,
+                1 => AttributeDomain::Vertex,
+                2 => AttributeDomain::Primitive,
+                _ => AttributeDomain::Detail,
+            };
+            if !code.trim().is_empty() {
+                apply_wrangle(&mut input, domain, code)?;
             }
             Ok(input)
         }

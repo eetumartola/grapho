@@ -86,6 +86,7 @@ It should initially have a 3D viewport and a DAG node view, with options for fut
 
 * Window layout: Viewport / Node graph, plus optional Inspector / Debug / Console panels
 * Viewport split: main viewport + attribute spreadsheet (draggable divider)
+* Top bar toggles for Parameters/Spreadsheet/Debug/Console panels
 * State:
 
   * UI state (panels, selection in node graph, camera settings)
@@ -95,6 +96,7 @@ It should initially have a 3D viewport and a DAG node view, with options for fut
 * Debug options UI -> toggles in renderer + core stats
 * Node info popups on middle-click or RMB menu
 * Node header flags (display/template) routed to viewport rendering
+* Wrangle node (simple attribute language with Houdini-style binding)
 
 ### 4) `io` crate (optional, can start in core)
 
@@ -240,16 +242,15 @@ Deliverables:
 * Nodes:
 
   * `Box` / `Grid` (source)
-  * `Transform`
-  * `Merge`
-  * `Copy to Points`
-  * `Sphere`
-  * `Subdivide` (simple)
-  * `NormalCompute` (if needed)
-  * `Output`
-  * `Color`
-  * `Scatter`
-  * `File` (OBJ)
+* `Transform`
+* `Merge`
+* `Copy to Points`
+* `Sphere`
+* `NormalCompute` (if needed)
+* `Output`
+* `Color`
+* `Scatter`
+* `File` (OBJ)
 
 ### Milestone 5 " Graph drives viewport
 
@@ -279,6 +280,7 @@ Deliverables:
   * `Copy/Transform` (duplicate with transforms)
   * `Noise/Mountain` (displace along normals)
   * `Attribute Math` (basic arithmetic on attributes)
+  * `Wrangle` (simple attribute language)
 * Viewport:
 
   * three-point lighting (key/fill/rim) with optional key shadows
@@ -292,6 +294,10 @@ Deliverables:
 
 * wasm build runs with viewport + node editor
 * File handling via browser download/upload or local storage
+* Web UX notes:
+  * Provide a simple "Open/Save" area in the UI with download/upload flow
+  * Provide a one-line help hint for required wasm MIME type and local hosting
+  * Avoid file dialogs that don't work in web builds (disable/replace)
 * Note: shader pipeline uses WGSL path for web
 
 ### Milestone 8 " Offline renderer "view" foundation (later)
@@ -336,5 +342,7 @@ Deliverables:
 * Web build is functional via `build_web.ps1` + wasm-bindgen output (static server required).
 * Debug panel shows dirty-node reasons (param vs upstream changes).
 * Viewport now supports point rendering, three-point lighting with optional key shadows, edge toggles, and a spreadsheet split for attribute inspection.
+* Spreadsheet panel toggle added to the top bar; node info panel also supports "hold MMB to show".
 * New nodes added: OBJ Output, Copy/Transform, Noise/Mountain, Attribute Math.
 * Display/template flags: in place (viewport shows display flag output + template wireframe).
+* Wrangle node: planned.

@@ -36,7 +36,7 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
             (ParamValue::Float(v), changed)
         }
         ParamValue::Int(mut v) => {
-            let changed = if label == "domain" {
+            let changed = if label == "domain" || label == "mode" {
                 param_row(ui, label, |ui| {
                     let mut changed = false;
                     let options = [(1, "Vertex"), (0, "Point"), (2, "Primitive"), (3, "Detail")];
@@ -162,22 +162,42 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
             (ParamValue::Vec3(v), changed)
         }
         ParamValue::String(mut v) => {
-            let changed = param_row(ui, label, |ui| {
-                let height = ui.spacing().interact_size.y;
-                ui.add_sized(
-                    [ui.available_width().max(160.0), height],
-                    egui::TextEdit::singleline(&mut v),
-                )
-                .changed()
-            });
+            let changed = if label == "code" {
+                param_row_with_height(ui, label, 120.0, |ui| {
+                    ui.add_sized(
+                        [ui.available_width().max(160.0), 100.0],
+                        egui::TextEdit::multiline(&mut v)
+                            .code_editor()
+                            .desired_rows(4),
+                    )
+                    .changed()
+                })
+            } else {
+                param_row(ui, label, |ui| {
+                    let height = ui.spacing().interact_size.y;
+                    ui.add_sized(
+                        [ui.available_width().max(160.0), height],
+                        egui::TextEdit::singleline(&mut v),
+                    )
+                    .changed()
+                })
+            };
             (ParamValue::String(v), changed)
         }
     }
 }
 
 fn param_row(ui: &mut Ui, label: &str, add_controls: impl FnOnce(&mut Ui) -> bool) -> bool {
+    param_row_with_height(ui, label, 36.0, add_controls)
+}
+
+fn param_row_with_height(
+    ui: &mut Ui,
+    label: &str,
+    row_height: f32,
+    add_controls: impl FnOnce(&mut Ui) -> bool,
+) -> bool {
     let total_width = ui.available_width();
-    let row_height = 36.0;
     let label_width = (total_width * 0.2).clamp(80.0, 160.0);
     let controls_width = (total_width - label_width).max(120.0);
     let mut changed = false;

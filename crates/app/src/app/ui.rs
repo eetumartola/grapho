@@ -3,6 +3,7 @@ use grapho_core::ShadingMode;
 
 use super::node_info::NodeInfoPanel;
 use super::spreadsheet::show_spreadsheet;
+use super::wrangle_help::WrangleHelpPanel;
 use super::GraphoApp;
 
 impl eframe::App for GraphoApp {
@@ -681,6 +682,13 @@ impl eframe::App for GraphoApp {
             self.last_node_graph_rect = Some(right_rect);
         });
 
+        if let Some(pos) = self.node_graph.take_wrangle_help_request() {
+            self.wrangle_help_panel = Some(WrangleHelpPanel {
+                screen_pos: pos,
+                open: true,
+            });
+        }
+
         let middle_down = ctx.input(|i| i.pointer.button_down(egui::PointerButton::Middle));
         if middle_down {
             let hover_pos = ctx.input(|i| i.pointer.hover_pos().or_else(|| i.pointer.latest_pos()));
@@ -714,6 +722,10 @@ impl eframe::App for GraphoApp {
         let mut held_info_panel = self.held_info_panel.take();
         self.show_node_info_panel(ctx, &mut held_info_panel);
         self.held_info_panel = held_info_panel;
+
+        let mut wrangle_help_panel = self.wrangle_help_panel.take();
+        self.show_wrangle_help_panel(ctx, &mut wrangle_help_panel);
+        self.wrangle_help_panel = wrangle_help_panel;
 
         self.evaluate_if_needed();
     }
