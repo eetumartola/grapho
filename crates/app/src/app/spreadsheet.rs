@@ -49,14 +49,6 @@ pub(super) fn show_spreadsheet(
     }
 
     let max_rows = count.min(128);
-    let header_text = format!(
-        "{} elements, {} attributes (showing {} rows)",
-        count,
-        attrs.len(),
-        max_rows
-    );
-    ui.label(header_text);
-    ui.add_space(6.0);
 
     let font_id = FontId::monospace(13.0);
     let char_width = ui.fonts_mut(|f| f.glyph_width(&font_id, '0'));

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use glam::{EulerRot, Mat4, Quat, Vec3};
+use tracing::warn;
 
 use crate::attributes::{AttributeDomain, AttributeStorage};
 use crate::graph::{NodeDefinition, NodeParams, ParamValue, PinDefinition, PinType};
@@ -546,9 +547,16 @@ pub fn compute_mesh_node(
             let value_f = param_float(params, "value_f", 0.0);
             let value_v3 = param_vec3(params, "value_v3", [0.0, 0.0, 0.0]);
 
-            let attr_ref = input
-                .attribute(domain, attr)
-                .ok_or_else(|| format!("Attribute '{}' not found", attr))?;
+            let attr_ref = match input.attribute(domain, attr) {
+                Some(attr_ref) => attr_ref,
+                None => {
+                    warn!(
+                        "Attribute Math: '{}' not found on {:?}; passing input through",
+                        attr, domain
+                    );
+                    return Ok(input);
+                }
+            };
             match attr_ref {
                 crate::attributes::AttributeRef::Float(values) => {
                     let mut next = Vec::with_capacity(values.len());

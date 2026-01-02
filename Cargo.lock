@@ -518,6 +518,7 @@ dependencies = [
  "glam",
  "serde",
  "tobj",
+ "tracing",
  "web-time",
 ]
 

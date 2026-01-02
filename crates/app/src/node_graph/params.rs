@@ -36,34 +36,92 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
             (ParamValue::Float(v), changed)
         }
         ParamValue::Int(mut v) => {
-            let changed = param_row(ui, label, |ui| {
-                let mut changed = false;
-                let spacing = 8.0;
-                let value_width = 64.0;
-                let height = ui.spacing().interact_size.y;
-                if ui
-                    .add_sized(
-                        [value_width, height],
-                        egui::DragValue::new(&mut v).speed(1.0),
-                    )
-                    .changed()
-                {
-                    changed = true;
-                }
-                let range = int_slider_range(label, v);
-                ui.add_space(spacing);
-                let slider_width = ui.available_width().max(120.0);
-                if ui
-                    .add_sized(
-                        [slider_width, height],
-                        egui::Slider::new(&mut v, range).show_value(false),
-                    )
-                    .changed()
-                {
-                    changed = true;
-                }
-                changed
-            });
+            let changed = if label == "domain" {
+                param_row(ui, label, |ui| {
+                    let mut changed = false;
+                    let options = [
+                        (1, "Vertex"),
+                        (0, "Point"),
+                        (2, "Primitive"),
+                        (3, "Detail"),
+                    ];
+                    let selected = options
+                        .iter()
+                        .find(|(value, _)| *value == v)
+                        .map(|(_, name)| *name)
+                        .unwrap_or("Point");
+                    egui::ComboBox::from_id_salt(label)
+                        .selected_text(selected)
+                        .show_ui(ui, |ui| {
+                            for (value, name) in options {
+                                if ui
+                                    .selectable_value(&mut v, value, name)
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                            }
+                        });
+                    changed
+                })
+            } else if label == "op" {
+                param_row(ui, label, |ui| {
+                    let mut changed = false;
+                    let options = [
+                        (0, "Add"),
+                        (1, "Subtract"),
+                        (2, "Multiply"),
+                        (3, "Divide"),
+                    ];
+                    let selected = options
+                        .iter()
+                        .find(|(value, _)| *value == v)
+                        .map(|(_, name)| *name)
+                        .unwrap_or("Add");
+                    egui::ComboBox::from_id_salt(label)
+                        .selected_text(selected)
+                        .show_ui(ui, |ui| {
+                            for (value, name) in options {
+                                if ui
+                                    .selectable_value(&mut v, value, name)
+                                    .changed()
+                                {
+                                    changed = true;
+                                }
+                            }
+                        });
+                    changed
+                })
+            } else {
+                param_row(ui, label, |ui| {
+                    let mut changed = false;
+                    let spacing = 8.0;
+                    let value_width = 64.0;
+                    let height = ui.spacing().interact_size.y;
+                    if ui
+                        .add_sized(
+                            [value_width, height],
+                            egui::DragValue::new(&mut v).speed(1.0),
+                        )
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                    let range = int_slider_range(label, v);
+                    ui.add_space(spacing);
+                    let slider_width = ui.available_width().max(120.0);
+                    if ui
+                        .add_sized(
+                            [slider_width, height],
+                            egui::Slider::new(&mut v, range).show_value(false),
+                        )
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                    changed
+                })
+            };
             (ParamValue::Int(v), changed)
         }
         ParamValue::Bool(mut v) => {

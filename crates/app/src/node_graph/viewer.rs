@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use egui::{Pos2, Rect, Ui};
+use egui::{Align2, FontId, Pos2, Rect, TextStyle, Ui};
 use egui_snarl::ui::{AnyPins, PinInfo, SnarlPin, SnarlViewer};
 use egui_snarl::{InPinId, OutPinId, Snarl};
 
@@ -131,7 +131,29 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         snarl: &mut Snarl<SnarlNode>,
     ) {
         let title = self.title(&snarl[node]);
-        ui.label(title);
+        let height = ui.spacing().interact_size.y;
+        let width = ui.available_width().max(24.0);
+        let (rect, response) =
+            ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click_and_drag());
+        if response.dragged_by(egui::PointerButton::Primary) && self.graph_transform.valid {
+            if let Some(node_info) = snarl.get_node_info_mut(node) {
+                let scale = self.graph_transform.to_global.scaling.max(0.0001);
+                let delta = response.drag_delta() / scale;
+                node_info.pos += delta;
+                self.changed = true;
+            }
+        }
+
+        let font_id = ui
+            .style()
+            .text_styles
+            .get(&TextStyle::Body)
+            .cloned()
+            .unwrap_or_else(|| FontId::proportional(14.0));
+        let color = ui.visuals().text_color();
+        let text_pos = rect.left_center() + egui::vec2(4.0, 0.0);
+        ui.painter()
+            .text(text_pos, Align2::LEFT_CENTER, title, font_id, color);
     }
 
     fn inputs(&mut self, node: &SnarlNode) -> usize {
