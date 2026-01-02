@@ -659,11 +659,9 @@ impl eframe::App for GraphoApp {
 
             ui.scope_builder(egui::UiBuilder::new().max_rect(graph_rect), |ui| {
                 let snapshot = self.snapshot_undo();
-                let before_positions = snapshot.layout.positions.clone();
                 self.node_graph
                     .show(ui, &mut self.project.graph, &mut self.eval_dirty);
-                let after_positions = self.node_graph.layout_snapshot().positions;
-                let layout_moved = before_positions != after_positions;
+                let layout_moved = self.node_graph.take_layout_changed();
                 if (self.node_graph.take_changed() || layout_moved) && !undo_pushed {
                     self.queue_undo_snapshot(snapshot, pointer_down);
                     undo_pushed = true;

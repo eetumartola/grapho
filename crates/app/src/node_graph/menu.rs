@@ -39,6 +39,11 @@ pub(super) fn builtin_menu_items() -> Vec<MenuItem> {
             category: "Operators",
         },
         MenuItem {
+            kind: BuiltinNodeKind::CopyTransform,
+            name: "Copy/Transform",
+            category: "Operators",
+        },
+        MenuItem {
             kind: BuiltinNodeKind::Merge,
             name: "Merge",
             category: "Operators",
@@ -57,6 +62,21 @@ pub(super) fn builtin_menu_items() -> Vec<MenuItem> {
             kind: BuiltinNodeKind::Color,
             name: "Color",
             category: "Operators",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::Noise,
+            name: "Noise/Mountain",
+            category: "Operators",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::AttributeMath,
+            name: "Attribute Math",
+            category: "Operators",
+        },
+        MenuItem {
+            kind: BuiltinNodeKind::ObjOutput,
+            name: "OBJ Output",
+            category: "Outputs",
         },
         MenuItem {
             kind: BuiltinNodeKind::Output,

@@ -49,6 +49,7 @@ pub struct NodeGraphState {
     node_menu_screen_pos: Pos2,
     node_menu_node: Option<NodeId>,
     last_changed: bool,
+    layout_changed: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -97,6 +98,7 @@ impl Default for NodeGraphState {
             node_menu_screen_pos: Pos2::new(0.0, 0.0),
             node_menu_node: None,
             last_changed: false,
+            layout_changed: false,
         }
     }
 }
@@ -135,6 +137,7 @@ impl NodeGraphState {
         self.input_pin_positions.borrow_mut().clear();
         self.output_pin_positions.borrow_mut().clear();
         self.last_changed = false;
+        self.layout_changed = false;
 
         let mut viewer = NodeGraphViewer {
             graph,
@@ -167,6 +170,15 @@ impl NodeGraphState {
         };
         self.snarl.show(&mut viewer, &style, "node_graph", ui);
         self.last_changed |= viewer.changed;
+        for (node, pos, _) in self.snarl.nodes_pos_ids() {
+            let Some(prev) = self.prev_snarl_positions.get(&node) else {
+                continue;
+            };
+            if (*prev - pos).length_sq() > 0.5 {
+                self.layout_changed = true;
+                break;
+            }
+        }
 
         if viewer.changed {
             *eval_dirty = true;
@@ -203,6 +215,12 @@ impl NodeGraphState {
     pub fn take_changed(&mut self) -> bool {
         let changed = self.last_changed;
         self.last_changed = false;
+        changed
+    }
+
+    pub fn take_layout_changed(&mut self) -> bool {
+        let changed = self.layout_changed;
+        self.layout_changed = false;
         changed
     }
 

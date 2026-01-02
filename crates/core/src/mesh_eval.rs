@@ -65,9 +65,13 @@ pub fn evaluate_mesh_graph(
 
         let inputs = match kind {
             crate::nodes_builtin::BuiltinNodeKind::Transform
+            | crate::nodes_builtin::BuiltinNodeKind::CopyTransform
             | crate::nodes_builtin::BuiltinNodeKind::Normal
             | crate::nodes_builtin::BuiltinNodeKind::Scatter
             | crate::nodes_builtin::BuiltinNodeKind::Color
+            | crate::nodes_builtin::BuiltinNodeKind::Noise
+            | crate::nodes_builtin::BuiltinNodeKind::AttributeMath
+            | crate::nodes_builtin::BuiltinNodeKind::ObjOutput
             | crate::nodes_builtin::BuiltinNodeKind::Output => {
                 if let Some(mesh) = input_meshes.first().and_then(|mesh| mesh.clone()) {
                     vec![mesh]

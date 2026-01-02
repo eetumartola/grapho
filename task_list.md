@@ -150,6 +150,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### C5. Point rendering mode
 
 **Depends:** C3, F1
+**Status:** done
 
 * Render points when mesh has points-only topology
 * Toggleable point rendering mode in viewport UI
@@ -160,6 +161,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### C6. Three-point lighting + key shadows
 
 **Depends:** C3
+**Status:** done
 
 * Classic key/fill/rim lights with configurable intensities
 * Optional shadow mapping on key light (can be off by default)
@@ -411,6 +413,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### F14. OBJ Output node
 
 **Depends:** F1, E1
+**Status:** done
 
 * Write mesh to OBJ on disk (native builds)
 * Parameters: path, triangulate toggle (if needed)
@@ -421,6 +424,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### F15. Copy/Transform node
 
 **Depends:** F1, E1
+**Status:** done
 
 * Duplicate mesh with count + transform (translate/rotate/scale)
 * Supports per-copy offset or step parameters
@@ -431,6 +435,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### F16. Noise/Mountain node
 
 **Depends:** F1, E1
+**Status:** done
 
 * Displace along normals using noise
 * Parameters: amplitude, frequency, seed, offset
@@ -441,6 +446,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### F17. Attribute Math node
 
 **Depends:** F10, E1
+**Status:** done
 
 * Basic arithmetic on attributes (add/mul/sub/div, clamp)
 * Operates on a chosen domain; supports attribute + constant
@@ -504,6 +510,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### N1. Viewport edge toggles
 
 **Depends:** B1, C3
+**Status:** done
 
 * Compact icon toggles near viewport edge for render features
 * Reflect active state (lit/points/shadows/overlays)
@@ -514,6 +521,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### N2. Viewport split + spreadsheet
 
 **Depends:** B1, F10
+**Status:** done
 
 * Split viewport area with draggable divider
 * Spreadsheet shows attributes for selected node
@@ -592,6 +600,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 **Status:** in progress
 
 * Commands: add node, delete node, add link, delete link, change param
+* Track node moves (layout changes) for undo
 * Undo stack
   **Acceptance**
 * Ctrl+Z/Y works for at least the above command types

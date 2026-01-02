@@ -87,9 +87,14 @@ impl CallbackTrait for ViewportCallback {
                 }
             }
 
-            let light_view_proj =
-                light_view_projection(pipeline.mesh_bounds, key_dir);
+            let light_view_proj = light_view_projection(pipeline.mesh_bounds, key_dir);
             let shadow_enabled = self.debug.key_shadows && pipeline.index_count > 0;
+            let bounds_min = Vec3::from(pipeline.mesh_bounds.0);
+            let bounds_max = Vec3::from(pipeline.mesh_bounds.1);
+            let radius = ((bounds_max - bounds_min) * 0.5).length().max(0.5);
+            let shadow_bias = (radius * 0.00025).clamp(0.000025, 0.005);
+            let normal_bias = 0.0;
+            let shadow_texel = 1.0 / pipeline._shadow_size.max(1) as f32;
 
             let uniforms = Uniforms {
                 view_proj: view_proj.to_cols_array_2d(),
@@ -113,9 +118,9 @@ impl CallbackTrait for ViewportCallback {
                 ],
                 shadow_params: [
                     if shadow_enabled { 1.0 } else { 0.0 },
-                    0.002,
-                    0.0,
-                    0.0,
+                    shadow_bias,
+                    shadow_texel,
+                    normal_bias,
                 ],
             };
 
@@ -347,19 +352,43 @@ fn light_view_projection(bounds: ([f32; 3], [f32; 3]), key_dir: Vec3) -> Mat4 {
     } else {
         Vec3::new(0.6, 1.0, 0.2).normalize()
     };
-    let light_pos = center - dir * radius * 4.0;
+    let light_pos = center + dir * radius * 4.0;
     let mut up = Vec3::Y;
-    if dir.abs().dot(up) > 0.9 {
+    if dir.abs().dot(up) > 0.95 {
         up = Vec3::Z;
     }
+    let mut right = dir.cross(up);
+    if right.length_squared() < 0.0001 {
+        right = dir.cross(Vec3::X);
+    }
+    right = right.normalize_or_zero();
+    up = right.cross(dir).normalize_or_zero();
     let view = Mat4::look_at_rh(light_pos, center, up);
-    let ortho = Mat4::orthographic_rh(
-        -radius,
-        radius,
-        -radius,
-        radius,
-        -radius * 6.0,
-        radius * 6.0,
-    );
+    let corners = [
+        Vec3::new(min.x, min.y, min.z),
+        Vec3::new(min.x, min.y, max.z),
+        Vec3::new(min.x, max.y, min.z),
+        Vec3::new(min.x, max.y, max.z),
+        Vec3::new(max.x, min.y, min.z),
+        Vec3::new(max.x, min.y, max.z),
+        Vec3::new(max.x, max.y, min.z),
+        Vec3::new(max.x, max.y, max.z),
+    ];
+    let mut min_ls = Vec3::splat(f32::INFINITY);
+    let mut max_ls = Vec3::splat(f32::NEG_INFINITY);
+    for corner in corners {
+        let ls = (view * corner.extend(1.0)).truncate();
+        min_ls = min_ls.min(ls);
+        max_ls = max_ls.max(ls);
+    }
+    let xy_pad = radius * 0.05;
+    let z_pad = radius * 0.1;
+    min_ls.x -= xy_pad;
+    min_ls.y -= xy_pad;
+    max_ls.x += xy_pad;
+    max_ls.y += xy_pad;
+    let near = (-max_ls.z - z_pad).max(0.01);
+    let far = (-min_ls.z + z_pad).max(near + 0.01);
+    let ortho = Mat4::orthographic_rh(min_ls.x, max_ls.x, min_ls.y, max_ls.y, near, far);
     ortho * view
 }

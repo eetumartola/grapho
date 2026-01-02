@@ -333,4 +333,5 @@ Deliverables:
 * Node info panel shows counts/bounds/attributes; RMB menu restored for node actions.
 * Web build is functional via `build_web.ps1` + wasm-bindgen output (static server required).
 * Debug panel shows dirty-node reasons (param vs upstream changes).
-* New work queued: OBJ Output, Copy/Transform, Noise/Mountain, Attribute Math, point rendering, three-point lighting + shadows, viewport icons, attribute spreadsheet split.
+* Viewport now supports point rendering, three-point lighting with optional key shadows, edge toggles, and a spreadsheet split for attribute inspection.
+* New nodes added: OBJ Output, Copy/Transform, Noise/Mountain, Attribute Math.

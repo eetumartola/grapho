@@ -182,6 +182,7 @@ fn float_slider_range(label: &str, _value: f32) -> std::ops::RangeInclusive<f32>
 fn int_slider_range(label: &str, _value: i32) -> std::ops::RangeInclusive<i32> {
     match label {
         "domain" => 0..=3,
+        "op" => 0..=3,
         "rows" | "cols" => 2..=64,
         _ => -1000..=1000,
     }

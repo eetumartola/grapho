@@ -15,11 +15,15 @@ pub enum BuiltinNodeKind {
     Sphere,
     File,
     Transform,
+    CopyTransform,
     Merge,
     CopyToPoints,
     Scatter,
     Normal,
     Color,
+    Noise,
+    AttributeMath,
+    ObjOutput,
     Output,
 }
 
@@ -31,11 +35,15 @@ impl BuiltinNodeKind {
             BuiltinNodeKind::Sphere => "Sphere",
             BuiltinNodeKind::File => "File",
             BuiltinNodeKind::Transform => "Transform",
+            BuiltinNodeKind::CopyTransform => "Copy/Transform",
             BuiltinNodeKind::Merge => "Merge",
             BuiltinNodeKind::CopyToPoints => "Copy to Points",
             BuiltinNodeKind::Scatter => "Scatter",
             BuiltinNodeKind::Normal => "Normal",
             BuiltinNodeKind::Color => "Color",
+            BuiltinNodeKind::Noise => "Noise/Mountain",
+            BuiltinNodeKind::AttributeMath => "Attribute Math",
+            BuiltinNodeKind::ObjOutput => "OBJ Output",
             BuiltinNodeKind::Output => "Output",
         }
     }
@@ -48,11 +56,15 @@ pub fn builtin_kind_from_name(name: &str) -> Option<BuiltinNodeKind> {
         "Sphere" => Some(BuiltinNodeKind::Sphere),
         "File" => Some(BuiltinNodeKind::File),
         "Transform" => Some(BuiltinNodeKind::Transform),
+        "Copy/Transform" => Some(BuiltinNodeKind::CopyTransform),
         "Merge" => Some(BuiltinNodeKind::Merge),
         "Copy to Points" => Some(BuiltinNodeKind::CopyToPoints),
         "Scatter" => Some(BuiltinNodeKind::Scatter),
         "Normal" => Some(BuiltinNodeKind::Normal),
         "Color" => Some(BuiltinNodeKind::Color),
+        "Noise/Mountain" => Some(BuiltinNodeKind::Noise),
+        "Attribute Math" => Some(BuiltinNodeKind::AttributeMath),
+        "OBJ Output" => Some(BuiltinNodeKind::ObjOutput),
         "Output" => Some(BuiltinNodeKind::Output),
         _ => None,
     }
@@ -65,11 +77,15 @@ pub fn builtin_definitions() -> Vec<NodeDefinition> {
         node_definition(BuiltinNodeKind::Sphere),
         node_definition(BuiltinNodeKind::File),
         node_definition(BuiltinNodeKind::Transform),
+        node_definition(BuiltinNodeKind::CopyTransform),
         node_definition(BuiltinNodeKind::Merge),
         node_definition(BuiltinNodeKind::CopyToPoints),
         node_definition(BuiltinNodeKind::Scatter),
         node_definition(BuiltinNodeKind::Normal),
         node_definition(BuiltinNodeKind::Color),
+        node_definition(BuiltinNodeKind::Noise),
+        node_definition(BuiltinNodeKind::AttributeMath),
+        node_definition(BuiltinNodeKind::ObjOutput),
         node_definition(BuiltinNodeKind::Output),
     ]
 }
@@ -110,6 +126,12 @@ pub fn node_definition(kind: BuiltinNodeKind) -> NodeDefinition {
             outputs: vec![mesh_out()],
         },
         BuiltinNodeKind::Transform => NodeDefinition {
+            name: kind.name().to_string(),
+            category: "Operators".to_string(),
+            inputs: vec![mesh_in()],
+            outputs: vec![mesh_out()],
+        },
+        BuiltinNodeKind::CopyTransform => NodeDefinition {
             name: kind.name().to_string(),
             category: "Operators".to_string(),
             inputs: vec![mesh_in()],
@@ -163,6 +185,24 @@ pub fn node_definition(kind: BuiltinNodeKind) -> NodeDefinition {
             inputs: vec![mesh_in()],
             outputs: vec![mesh_out()],
         },
+        BuiltinNodeKind::Noise => NodeDefinition {
+            name: kind.name().to_string(),
+            category: "Operators".to_string(),
+            inputs: vec![mesh_in()],
+            outputs: vec![mesh_out()],
+        },
+        BuiltinNodeKind::AttributeMath => NodeDefinition {
+            name: kind.name().to_string(),
+            category: "Operators".to_string(),
+            inputs: vec![mesh_in()],
+            outputs: vec![mesh_out()],
+        },
+        BuiltinNodeKind::ObjOutput => NodeDefinition {
+            name: kind.name().to_string(),
+            category: "Outputs".to_string(),
+            inputs: vec![mesh_in()],
+            outputs: vec![mesh_out()],
+        },
         BuiltinNodeKind::Output => NodeDefinition {
             name: kind.name().to_string(),
             category: "Outputs".to_string(),
@@ -203,6 +243,21 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
             values.insert("scale".to_string(), ParamValue::Vec3([1.0, 1.0, 1.0]));
             values.insert("pivot".to_string(), ParamValue::Vec3([0.0, 0.0, 0.0]));
         }
+        BuiltinNodeKind::CopyTransform => {
+            values.insert("count".to_string(), ParamValue::Int(5));
+            values.insert(
+                "translate_step".to_string(),
+                ParamValue::Vec3([1.0, 0.0, 0.0]),
+            );
+            values.insert(
+                "rotate_step_deg".to_string(),
+                ParamValue::Vec3([0.0, 0.0, 0.0]),
+            );
+            values.insert(
+                "scale_step".to_string(),
+                ParamValue::Vec3([0.0, 0.0, 0.0]),
+            );
+        }
         BuiltinNodeKind::Merge => {}
         BuiltinNodeKind::CopyToPoints => {
             values.insert("align_to_normals".to_string(), ParamValue::Bool(true));
@@ -220,6 +275,23 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
         BuiltinNodeKind::Color => {
             values.insert("color".to_string(), ParamValue::Vec3([1.0, 1.0, 1.0]));
             values.insert("domain".to_string(), ParamValue::Int(0));
+        }
+        BuiltinNodeKind::Noise => {
+            values.insert("amplitude".to_string(), ParamValue::Float(0.2));
+            values.insert("frequency".to_string(), ParamValue::Float(1.0));
+            values.insert("seed".to_string(), ParamValue::Int(1));
+            values.insert("offset".to_string(), ParamValue::Vec3([0.0, 0.0, 0.0]));
+        }
+        BuiltinNodeKind::AttributeMath => {
+            values.insert("attr".to_string(), ParamValue::String("Cd".to_string()));
+            values.insert("result".to_string(), ParamValue::String("Cd".to_string()));
+            values.insert("domain".to_string(), ParamValue::Int(0));
+            values.insert("op".to_string(), ParamValue::Int(0));
+            values.insert("value_f".to_string(), ParamValue::Float(0.0));
+            values.insert("value_v3".to_string(), ParamValue::Vec3([1.0, 1.0, 1.0]));
+        }
+        BuiltinNodeKind::ObjOutput => {
+            values.insert("path".to_string(), ParamValue::String("output.obj".to_string()));
         }
         BuiltinNodeKind::Output => {}
     }
@@ -301,6 +373,33 @@ pub fn compute_mesh_node(
             let mut mesh = input;
             mesh.transform(matrix);
             Ok(mesh)
+        }
+        BuiltinNodeKind::CopyTransform => {
+            let input = inputs
+                .first()
+                .cloned()
+                .ok_or_else(|| "Copy/Transform requires a mesh input".to_string())?;
+            let count = param_int(params, "count", 1).max(0) as usize;
+            if count == 0 {
+                return Ok(Mesh::default());
+            }
+            let translate_step = param_vec3(params, "translate_step", [0.0, 0.0, 0.0]);
+            let rotate_step = param_vec3(params, "rotate_step_deg", [0.0, 0.0, 0.0]);
+            let scale_step = param_vec3(params, "scale_step", [0.0, 0.0, 0.0]);
+
+            let mut copies = Vec::with_capacity(count);
+            for i in 0..count {
+                let factor = i as f32;
+                let translate = Vec3::from(translate_step) * factor;
+                let rot = Vec3::from(rotate_step) * factor * std::f32::consts::PI / 180.0;
+                let quat = Quat::from_euler(EulerRot::XYZ, rot.x, rot.y, rot.z);
+                let scale = Vec3::new(1.0, 1.0, 1.0) + Vec3::from(scale_step) * factor;
+                let matrix = Mat4::from_scale_rotation_translation(scale, quat, translate);
+                let mut mesh = input.clone();
+                mesh.transform(matrix);
+                copies.push(mesh);
+            }
+            Ok(Mesh::merge(&copies))
         }
         BuiltinNodeKind::Merge => {
             if inputs.is_empty() {
@@ -402,6 +501,128 @@ pub fn compute_mesh_node(
                 .map_err(|err| format!("Color attribute error: {:?}", err))?;
             Ok(input)
         }
+        BuiltinNodeKind::Noise => {
+            let mut input = inputs
+                .first()
+                .cloned()
+                .ok_or_else(|| "Noise/Mountain requires a mesh input".to_string())?;
+            let amplitude = param_float(params, "amplitude", 0.2);
+            let frequency = param_float(params, "frequency", 1.0).max(0.0);
+            let seed = param_int(params, "seed", 1) as u32;
+            let offset = Vec3::from(param_vec3(params, "offset", [0.0, 0.0, 0.0]));
+
+            if input.normals.is_none() {
+                let _ = input.compute_normals();
+            }
+            let normals = input
+                .normals
+                .clone()
+                .ok_or_else(|| "Noise/Mountain requires point normals".to_string())?;
+
+            for (pos, normal) in input.positions.iter_mut().zip(normals.iter()) {
+                let p = Vec3::from(*pos) * frequency + offset;
+                let n = fractal_noise(p, seed);
+                let displacement = Vec3::from(*normal) * (n * amplitude);
+                let next = Vec3::from(*pos) + displacement;
+                *pos = next.to_array();
+            }
+
+            Ok(input)
+        }
+        BuiltinNodeKind::AttributeMath => {
+            let mut input = inputs
+                .first()
+                .cloned()
+                .ok_or_else(|| "Attribute Math requires a mesh input".to_string())?;
+            let attr = param_string(params, "attr", "Cd");
+            let result = param_string(params, "result", attr);
+            let domain = match param_int(params, "domain", 0).clamp(0, 3) {
+                0 => AttributeDomain::Point,
+                1 => AttributeDomain::Vertex,
+                2 => AttributeDomain::Primitive,
+                _ => AttributeDomain::Detail,
+            };
+            let op = param_int(params, "op", 0).clamp(0, 3);
+            let value_f = param_float(params, "value_f", 0.0);
+            let value_v3 = param_vec3(params, "value_v3", [0.0, 0.0, 0.0]);
+
+            let attr_ref = input
+                .attribute(domain, attr)
+                .ok_or_else(|| format!("Attribute '{}' not found", attr))?;
+            match attr_ref {
+                crate::attributes::AttributeRef::Float(values) => {
+                    let mut next = Vec::with_capacity(values.len());
+                    for &v in values {
+                        next.push(apply_op_f(v, value_f, op));
+                    }
+                    input
+                        .set_attribute(domain, result, AttributeStorage::Float(next))
+                        .map_err(|err| format!("Attribute Math error: {:?}", err))?;
+                }
+                crate::attributes::AttributeRef::Int(values) => {
+                    let mut next = Vec::with_capacity(values.len());
+                    let value_i = value_f.round() as i32;
+                    for &v in values {
+                        next.push(apply_op_i(v, value_i, op));
+                    }
+                    input
+                        .set_attribute(domain, result, AttributeStorage::Int(next))
+                        .map_err(|err| format!("Attribute Math error: {:?}", err))?;
+                }
+                crate::attributes::AttributeRef::Vec2(values) => {
+                    let mut next = Vec::with_capacity(values.len());
+                    for &v in values {
+                        next.push([
+                            apply_op_f(v[0], value_f, op),
+                            apply_op_f(v[1], value_f, op),
+                        ]);
+                    }
+                    input
+                        .set_attribute(domain, result, AttributeStorage::Vec2(next))
+                        .map_err(|err| format!("Attribute Math error: {:?}", err))?;
+                }
+                crate::attributes::AttributeRef::Vec3(values) => {
+                    let mut next = Vec::with_capacity(values.len());
+                    for &v in values {
+                        next.push([
+                            apply_op_f(v[0], value_v3[0], op),
+                            apply_op_f(v[1], value_v3[1], op),
+                            apply_op_f(v[2], value_v3[2], op),
+                        ]);
+                    }
+                    input
+                        .set_attribute(domain, result, AttributeStorage::Vec3(next))
+                        .map_err(|err| format!("Attribute Math error: {:?}", err))?;
+                }
+                crate::attributes::AttributeRef::Vec4(values) => {
+                    let mut next = Vec::with_capacity(values.len());
+                    for &v in values {
+                        next.push([
+                            apply_op_f(v[0], value_f, op),
+                            apply_op_f(v[1], value_f, op),
+                            apply_op_f(v[2], value_f, op),
+                            apply_op_f(v[3], value_f, op),
+                        ]);
+                    }
+                    input
+                        .set_attribute(domain, result, AttributeStorage::Vec4(next))
+                        .map_err(|err| format!("Attribute Math error: {:?}", err))?;
+                }
+            }
+            Ok(input)
+        }
+        BuiltinNodeKind::ObjOutput => {
+            let input = inputs
+                .first()
+                .cloned()
+                .ok_or_else(|| "OBJ Output requires a mesh input".to_string())?;
+            let path = param_string(params, "path", "output.obj");
+            if path.trim().is_empty() {
+                return Err("OBJ Output requires a path".to_string());
+            }
+            write_obj(path, &input)?;
+            Ok(input)
+        }
         BuiltinNodeKind::Output => {
             let input = inputs
                 .first()
@@ -477,6 +698,96 @@ fn param_string<'a>(params: &'a NodeParams, key: &str, default: &'a str) -> &'a 
             _ => None,
         })
         .unwrap_or(default)
+}
+
+fn apply_op_f(value: f32, rhs: f32, op: i32) -> f32 {
+    match op {
+        0 => value + rhs,
+        1 => value - rhs,
+        2 => value * rhs,
+        3 => {
+            if rhs.abs() < 1.0e-6 {
+                value
+            } else {
+                value / rhs
+            }
+        }
+        _ => value,
+    }
+}
+
+fn apply_op_i(value: i32, rhs: i32, op: i32) -> i32 {
+    match op {
+        0 => value.saturating_add(rhs),
+        1 => value.saturating_sub(rhs),
+        2 => value.saturating_mul(rhs),
+        3 => {
+            if rhs == 0 {
+                value
+            } else {
+                value / rhs
+            }
+        }
+        _ => value,
+    }
+}
+
+fn fractal_noise(p: Vec3, seed: u32) -> f32 {
+    let mut value = 0.0;
+    let mut amp = 1.0;
+    let mut freq = 1.0;
+    for _ in 0..3 {
+        value += value_noise(p * freq, seed) * amp;
+        amp *= 0.5;
+        freq *= 2.0;
+    }
+    value
+}
+
+fn value_noise(p: Vec3, seed: u32) -> f32 {
+    let base = p.floor();
+    let frac = p - base;
+    let f = frac * frac * (Vec3::splat(3.0) - 2.0 * frac);
+
+    let x0 = base.x as i32;
+    let y0 = base.y as i32;
+    let z0 = base.z as i32;
+    let x1 = x0 + 1;
+    let y1 = y0 + 1;
+    let z1 = z0 + 1;
+
+    let c000 = hash3(x0, y0, z0, seed);
+    let c100 = hash3(x1, y0, z0, seed);
+    let c010 = hash3(x0, y1, z0, seed);
+    let c110 = hash3(x1, y1, z0, seed);
+    let c001 = hash3(x0, y0, z1, seed);
+    let c101 = hash3(x1, y0, z1, seed);
+    let c011 = hash3(x0, y1, z1, seed);
+    let c111 = hash3(x1, y1, z1, seed);
+
+    let x00 = lerp(c000, c100, f.x);
+    let x10 = lerp(c010, c110, f.x);
+    let x01 = lerp(c001, c101, f.x);
+    let x11 = lerp(c011, c111, f.x);
+    let y0 = lerp(x00, x10, f.y);
+    let y1 = lerp(x01, x11, f.y);
+    lerp(y0, y1, f.z) * 2.0 - 1.0
+}
+
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
+fn hash3(x: i32, y: i32, z: i32, seed: u32) -> f32 {
+    let mut h = x as u32;
+    h ^= (y as u32).wrapping_mul(374761393);
+    h = h.rotate_left(13);
+    h ^= (z as u32).wrapping_mul(668265263);
+    h = h.rotate_left(17);
+    h ^= seed.wrapping_mul(2246822519);
+    h = h.wrapping_mul(3266489917);
+    h = (h ^ (h >> 16)).wrapping_mul(2246822519);
+    (h as f32) / (u32::MAX as f32)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -561,6 +872,66 @@ fn load_obj_mesh(path: &str) -> Result<Mesh, String> {
     }
 
     Ok(mesh)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn write_obj(_path: &str, _mesh: &Mesh) -> Result<(), String> {
+    Err("OBJ Output is not supported in web builds".to_string())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn write_obj(path: &str, mesh: &Mesh) -> Result<(), String> {
+    use std::io::Write;
+
+    let mut file = std::fs::File::create(path).map_err(|err| err.to_string())?;
+    for p in &mesh.positions {
+        writeln!(file, "v {} {} {}", p[0], p[1], p[2]).map_err(|err| err.to_string())?;
+    }
+
+    let has_uv = mesh
+        .uvs
+        .as_ref()
+        .map_or(false, |uvs| uvs.len() == mesh.positions.len());
+    if let Some(uvs) = &mesh.uvs {
+        if has_uv {
+            for uv in uvs {
+                writeln!(file, "vt {} {}", uv[0], uv[1]).map_err(|err| err.to_string())?;
+            }
+        }
+    }
+
+    let has_normals = mesh
+        .normals
+        .as_ref()
+        .map_or(false, |normals| normals.len() == mesh.positions.len());
+    if let Some(normals) = &mesh.normals {
+        if has_normals {
+            for n in normals {
+                writeln!(file, "vn {} {} {}", n[0], n[1], n[2]).map_err(|err| err.to_string())?;
+            }
+        }
+    }
+
+    if !mesh.indices.is_empty() {
+        for tri in mesh.indices.chunks_exact(3) {
+            let a = tri[0] + 1;
+            let b = tri[1] + 1;
+            let c = tri[2] + 1;
+            if has_uv && has_normals {
+                writeln!(file, "f {a}/{a}/{a} {b}/{b}/{b} {c}/{c}/{c}")
+                    .map_err(|err| err.to_string())?;
+            } else if has_uv {
+                writeln!(file, "f {a}/{a} {b}/{b} {c}/{c}")
+                    .map_err(|err| err.to_string())?;
+            } else if has_normals {
+                writeln!(file, "f {a}//{a} {b}//{b} {c}//{c}")
+                    .map_err(|err| err.to_string())?;
+            } else {
+                writeln!(file, "f {a} {b} {c}").map_err(|err| err.to_string())?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn scatter_points(input: &Mesh, count: usize, seed: u32) -> Result<Mesh, String> {

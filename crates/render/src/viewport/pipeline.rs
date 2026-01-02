@@ -135,18 +135,34 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     return out;
 }
 
-fn shadow_factor(world_pos: vec3<f32>) -> f32 {
+fn shadow_factor(world_pos: vec3<f32>, normal: vec3<f32>) -> f32 {
     if uniforms.shadow_params.x < 0.5 {
         return 1.0;
     }
-    let light_clip = uniforms.light_view_proj * vec4<f32>(world_pos, 1.0);
+    let n = normalize(normal);
+    let light_dir = normalize(uniforms.key_dir);
+    let ndotl = max(dot(n, light_dir), 0.0);
+    let bias = uniforms.shadow_params.y + (1.0 - ndotl) * uniforms.shadow_params.y;
+    let offset_pos = world_pos + n * uniforms.shadow_params.w;
+    let light_clip = uniforms.light_view_proj * vec4<f32>(offset_pos, 1.0);
     let ndc = light_clip.xyz / max(light_clip.w, 0.0001);
-    let uv = ndc.xy * 0.5 + vec2<f32>(0.5, 0.5);
-    if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 {
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || ndc.z < 0.0 || ndc.z > 1.0 {
         return 1.0;
     }
-    let depth = ndc.z - uniforms.shadow_params.y;
-    return textureSampleCompare(shadow_tex, shadow_sampler, uv, depth);
+    let depth = ndc.z - bias;
+    let texel = max(uniforms.shadow_params.z, 0.000001);
+    var shadow = 0.0;
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(-texel, -texel), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(0.0, -texel), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(texel, -texel), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(-texel, 0.0), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv, depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(texel, 0.0), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(-texel, texel), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(0.0, texel), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(texel, texel), depth);
+    return shadow / 9.0;
 }
 
 fn shade_surface(normal: vec3<f32>, world_pos: vec3<f32>, color: vec3<f32>) -> vec3<f32> {
@@ -163,7 +179,7 @@ fn shade_surface(normal: vec3<f32>, world_pos: vec3<f32>, color: vec3<f32>) -> v
     let half_dir = normalize(key_dir + view_dir);
     let spec = pow(max(dot(n, half_dir), 0.0), 32.0);
 
-    let shadow = shadow_factor(world_pos);
+    let shadow = shadow_factor(world_pos, normal);
     let key = key_ndotl * uniforms.light_params.x * shadow;
     let fill = fill_ndotl * uniforms.light_params.y;
     let rim = rim_ndotl * uniforms.light_params.z;
@@ -415,7 +431,7 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                 fragment: None,
                 primitive: egui_wgpu::wgpu::PrimitiveState {
                     topology: egui_wgpu::wgpu::PrimitiveTopology::TriangleList,
-                    cull_mode: None,
+                    cull_mode: Some(egui_wgpu::wgpu::Face::Front),
                     ..Default::default()
                 },
                 depth_stencil: Some(egui_wgpu::wgpu::DepthStencilState {
@@ -424,8 +440,8 @@ fn fs_line(input: LineOutput) -> @location(0) vec4<f32> {
                     depth_compare: egui_wgpu::wgpu::CompareFunction::LessEqual,
                     stencil: egui_wgpu::wgpu::StencilState::default(),
                     bias: egui_wgpu::wgpu::DepthBiasState {
-                        constant: 2,
-                        slope_scale: 2.0,
+                        constant: 1,
+                        slope_scale: 1.0,
                         clamp: 0.0,
                     },
                 }),
