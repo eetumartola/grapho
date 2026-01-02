@@ -1,7 +1,9 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 use egui::{Pos2, Rect, Ui};
-use egui_snarl::ui::{AnyPins, PinInfo, SnarlViewer};
+use egui_snarl::ui::{AnyPins, PinInfo, SnarlPin, SnarlViewer};
 use egui_snarl::{InPinId, OutPinId, Snarl};
 
 use grapho_core::{default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinId};
@@ -19,6 +21,8 @@ pub(super) struct NodeGraphViewer<'a> {
     pub(super) selected_node: &'a mut Option<NodeId>,
     pub(super) node_rects: &'a mut HashMap<egui_snarl::NodeId, Rect>,
     pub(super) graph_transform: &'a mut GraphTransformState,
+    pub(super) input_pin_positions: Rc<RefCell<HashMap<InPinId, Pos2>>>,
+    pub(super) output_pin_positions: Rc<RefCell<HashMap<OutPinId, Pos2>>>,
     pub(super) add_menu_open: &'a mut bool,
     pub(super) add_menu_screen_pos: &'a mut Pos2,
     pub(super) add_menu_graph_pos: &'a mut Pos2,
@@ -26,9 +30,48 @@ pub(super) struct NodeGraphViewer<'a> {
     pub(super) add_menu_focus: &'a mut bool,
     pub(super) pending_wire: &'a mut Option<PendingWire>,
     pub(super) info_request: &'a mut Option<NodeInfoRequest>,
+    pub(super) node_menu_request: &'a mut Option<super::state::NodeMenuRequest>,
     pub(super) error_nodes: &'a HashSet<NodeId>,
     pub(super) error_messages: &'a HashMap<NodeId, String>,
     pub(super) changed: bool,
+}
+
+struct RecordedPin {
+    pin: PinInfo,
+    record: PinRecord,
+    graph_to_screen: egui::emath::TSTransform,
+}
+
+enum PinRecord {
+    In(InPinId, Rc<RefCell<HashMap<InPinId, Pos2>>>),
+    Out(OutPinId, Rc<RefCell<HashMap<OutPinId, Pos2>>>),
+}
+
+impl SnarlPin for RecordedPin {
+    fn pin_rect(&self, x: f32, y0: f32, y1: f32, size: f32) -> egui::Rect {
+        let y = (y0 + y1) * 0.5;
+        let rect = egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size, size));
+        let screen_pos = self.graph_to_screen * rect.center();
+        match &self.record {
+            PinRecord::In(id, store) => {
+                store.borrow_mut().insert(*id, screen_pos);
+            }
+            PinRecord::Out(id, store) => {
+                store.borrow_mut().insert(*id, screen_pos);
+            }
+        }
+        rect
+    }
+
+    fn draw(
+        self,
+        snarl_style: &egui_snarl::ui::SnarlStyle,
+        style: &egui::Style,
+        rect: egui::Rect,
+        painter: &egui::Painter,
+    ) -> egui_snarl::ui::PinWireInfo {
+        self.pin.draw(snarl_style, style, rect, painter)
+    }
 }
 
 impl<'a> NodeGraphViewer<'a> {
@@ -115,11 +158,19 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         if let Some(core_pin) = self.core_pin_for_input(snarl, pin.id) {
             if let Some(pin_data) = self.graph.pin(core_pin) {
                 ui.label(&pin_data.name);
-                return PinInfo::circle().with_fill(pin_color(pin_data.pin_type));
+                return RecordedPin {
+                    pin: PinInfo::circle().with_fill(pin_color(pin_data.pin_type)),
+                    record: PinRecord::In(pin.id, Rc::clone(&self.input_pin_positions)),
+                    graph_to_screen: self.graph_transform.to_global,
+                };
             }
         }
         ui.label("?");
-        PinInfo::circle()
+        RecordedPin {
+            pin: PinInfo::circle(),
+            record: PinRecord::In(pin.id, Rc::clone(&self.input_pin_positions)),
+            graph_to_screen: self.graph_transform.to_global,
+        }
     }
 
     fn show_output(
@@ -131,11 +182,19 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         if let Some(core_pin) = self.core_pin_for_output(snarl, pin.id) {
             if let Some(pin_data) = self.graph.pin(core_pin) {
                 ui.label(&pin_data.name);
-                return PinInfo::circle().with_fill(pin_color(pin_data.pin_type));
+                return RecordedPin {
+                    pin: PinInfo::circle().with_fill(pin_color(pin_data.pin_type)),
+                    record: PinRecord::Out(pin.id, Rc::clone(&self.output_pin_positions)),
+                    graph_to_screen: self.graph_transform.to_global,
+                };
             }
         }
         ui.label("?");
-        PinInfo::circle()
+        RecordedPin {
+            pin: PinInfo::circle(),
+            record: PinRecord::Out(pin.id, Rc::clone(&self.output_pin_positions)),
+            graph_to_screen: self.graph_transform.to_global,
+        }
     }
 
     fn has_graph_menu(&mut self, _pos: Pos2, _snarl: &mut Snarl<SnarlNode>) -> bool {
@@ -153,7 +212,7 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
     }
 
     fn has_node_menu(&mut self, _node: &SnarlNode) -> bool {
-        true
+        false
     }
 
     fn has_dropped_wire_menu(&mut self, _src_pins: AnyPins, _snarl: &mut Snarl<SnarlNode>) -> bool {
@@ -191,32 +250,7 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         ui: &mut Ui,
         snarl: &mut Snarl<SnarlNode>,
     ) {
-        if ui.button("Node info").clicked() {
-            if let Some(core_id) = self.core_node_id(snarl, node) {
-                let pos = ui
-                    .ctx()
-                    .input(|i| i.pointer.hover_pos())
-                    .unwrap_or(ui.cursor().min);
-                *self.info_request = Some(NodeInfoRequest {
-                    node_id: core_id,
-                    screen_pos: pos,
-                });
-            }
-            ui.close();
-        }
-        if ui.button("Delete node").clicked() {
-            if let Some(core_id) = self.core_node_id(snarl, node) {
-                self.graph.remove_node(core_id);
-                self.core_to_snarl.remove(&core_id);
-                self.snarl_to_core.remove(&node);
-                let _ = snarl.remove_node(node);
-                if self.selected_node.as_ref() == Some(&core_id) {
-                    *self.selected_node = None;
-                }
-                self.changed = true;
-            }
-            ui.close();
-        }
+        let _ = (node, ui, snarl);
     }
 
     fn final_node_rect(
@@ -274,6 +308,16 @@ impl SnarlViewer<SnarlNode> for NodeGraphViewer<'_> {
         if response.clicked_by(egui::PointerButton::Middle) {
             let pos = response.interact_pointer_pos().unwrap_or(ui_rect.center());
             *self.info_request = Some(NodeInfoRequest {
+                node_id: core_id,
+                screen_pos: pos,
+            });
+        }
+        if response.clicked_by(egui::PointerButton::Secondary) {
+            let pos = ui
+                .ctx()
+                .input(|i| i.pointer.latest_pos().or_else(|| i.pointer.hover_pos()))
+                .unwrap_or(ui_rect.center());
+            *self.node_menu_request = Some(super::state::NodeMenuRequest {
                 node_id: core_id,
                 screen_pos: pos,
             });

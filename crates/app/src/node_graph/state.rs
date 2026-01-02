@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 use egui::{vec2, Color32, Frame, Pos2, Rect, Stroke, Ui};
 use egui_snarl::ui::{BackgroundPattern, SnarlStyle};
@@ -10,8 +12,7 @@ use tracing;
 use super::menu::builtin_menu_items;
 use super::params::edit_param;
 use super::utils::{
-    add_builtin_node, find_input_of_type, find_output_of_type, point_bezier_distance,
-    point_segment_distance,
+    add_builtin_node, find_input_of_type, find_output_of_type, point_snarl_wire_distance,
 };
 use super::viewer::NodeGraphViewer;
 
@@ -29,6 +30,8 @@ pub struct NodeGraphState {
     selected_node: Option<NodeId>,
     node_ui_rects: HashMap<egui_snarl::NodeId, Rect>,
     prev_node_ui_rects: HashMap<egui_snarl::NodeId, Rect>,
+    prev_snarl_positions: HashMap<egui_snarl::NodeId, Pos2>,
+    last_dragged_node: Option<egui_snarl::NodeId>,
     dragging_node: Option<egui_snarl::NodeId>,
     add_menu_open: bool,
     add_menu_screen_pos: Pos2,
@@ -38,8 +41,14 @@ pub struct NodeGraphState {
     pending_wire: Option<PendingWire>,
     info_request: Option<NodeInfoRequest>,
     graph_transform: GraphTransformState,
+    input_pin_positions: Rc<RefCell<HashMap<InPinId, Pos2>>>,
+    output_pin_positions: Rc<RefCell<HashMap<OutPinId, Pos2>>>,
     error_nodes: HashSet<NodeId>,
     error_messages: HashMap<NodeId, String>,
+    node_menu_request: Option<NodeMenuRequest>,
+    node_menu_open: bool,
+    node_menu_screen_pos: Pos2,
+    node_menu_node: Option<NodeId>,
 }
 
 #[derive(Clone, Copy)]
@@ -65,6 +74,8 @@ impl Default for NodeGraphState {
             selected_node: None,
             node_ui_rects: HashMap::new(),
             prev_node_ui_rects: HashMap::new(),
+            prev_snarl_positions: HashMap::new(),
+            last_dragged_node: None,
             dragging_node: None,
             add_menu_open: false,
             add_menu_screen_pos: Pos2::new(0.0, 0.0),
@@ -77,10 +88,21 @@ impl Default for NodeGraphState {
                 to_global: egui::emath::TSTransform::IDENTITY,
                 valid: false,
             },
+            input_pin_positions: Rc::new(RefCell::new(HashMap::new())),
+            output_pin_positions: Rc::new(RefCell::new(HashMap::new())),
             error_nodes: HashSet::new(),
             error_messages: HashMap::new(),
+            node_menu_request: None,
+            node_menu_open: false,
+            node_menu_screen_pos: Pos2::new(0.0, 0.0),
+            node_menu_node: None,
         }
     }
+}
+
+pub(super) struct NodeMenuRequest {
+    pub(super) node_id: NodeId,
+    pub(super) screen_pos: Pos2,
 }
 
 impl NodeGraphState {
@@ -97,6 +119,14 @@ impl NodeGraphState {
 
         self.prev_node_ui_rects = std::mem::take(&mut self.node_ui_rects);
         self.node_ui_rects.clear();
+        let prev_positions = self.prev_snarl_positions.clone();
+        self.prev_snarl_positions = self
+            .snarl
+            .nodes_pos_ids()
+            .map(|(id, pos, _)| (id, pos))
+            .collect();
+        self.input_pin_positions.borrow_mut().clear();
+        self.output_pin_positions.borrow_mut().clear();
 
         let mut viewer = NodeGraphViewer {
             graph,
@@ -106,6 +136,8 @@ impl NodeGraphState {
             selected_node: &mut self.selected_node,
             node_rects: &mut self.node_ui_rects,
             graph_transform: &mut self.graph_transform,
+            input_pin_positions: Rc::clone(&self.input_pin_positions),
+            output_pin_positions: Rc::clone(&self.output_pin_positions),
             add_menu_open: &mut self.add_menu_open,
             add_menu_screen_pos: &mut self.add_menu_screen_pos,
             add_menu_graph_pos: &mut self.add_menu_graph_pos,
@@ -113,6 +145,7 @@ impl NodeGraphState {
             add_menu_focus: &mut self.add_menu_focus,
             pending_wire: &mut self.pending_wire,
             info_request: &mut self.info_request,
+            node_menu_request: &mut self.node_menu_request,
             error_nodes: &self.error_nodes,
             error_messages: &self.error_messages,
             changed: false,
@@ -139,10 +172,110 @@ impl NodeGraphState {
         }
 
         self.update_drag_state(ui);
+        self.update_dragged_node_from_positions(ui, &prev_positions);
 
         if self.handle_drop_on_wire(ui, graph) {
             *eval_dirty = true;
             self.needs_wire_sync = true;
+        }
+
+        if let Some(request) = self.node_menu_request.take() {
+            self.node_menu_open = true;
+            self.node_menu_node = Some(request.node_id);
+            self.node_menu_screen_pos = request.screen_pos;
+        }
+        if self.node_menu_open {
+            if self.show_node_menu(ui, graph) {
+                *eval_dirty = true;
+                self.needs_wire_sync = true;
+            }
+        }
+    }
+
+    fn show_node_menu(&mut self, ui: &mut Ui, graph: &mut Graph) -> bool {
+        let mut close_menu = ui.input(|i| i.key_pressed(egui::Key::Escape));
+        let mut menu_rect = None;
+        let mut changed = false;
+        let node_id = self.node_menu_node;
+
+        let response = egui::Window::new("node_context_menu")
+            .title_bar(false)
+            .resizable(false)
+            .collapsible(false)
+            .anchor(egui::Align2::LEFT_TOP, self.node_menu_screen_pos.to_vec2())
+            .frame(Frame::popup(ui.style()))
+            .show(ui.ctx(), |ui| {
+                if ui.button("Node info").clicked() {
+                    if let Some(node_id) = node_id {
+                        self.info_request = Some(NodeInfoRequest {
+                            node_id,
+                            screen_pos: self.node_menu_screen_pos,
+                        });
+                    }
+                    close_menu = true;
+                }
+                if ui.button("Delete node").clicked() {
+                    if let Some(node_id) = node_id {
+                        graph.remove_node(node_id);
+                        if let Some(snarl_id) = self.core_to_snarl.remove(&node_id) {
+                            self.snarl_to_core.remove(&snarl_id);
+                            let _ = self.snarl.remove_node(snarl_id);
+                        }
+                        if self.selected_node.as_ref() == Some(&node_id) {
+                            self.selected_node = None;
+                        }
+                        changed = true;
+                    }
+                    close_menu = true;
+                }
+            });
+
+        if let Some(inner) = response {
+            menu_rect = Some(inner.response.rect);
+        }
+
+        if !close_menu {
+            if let Some(rect) = menu_rect {
+                if ui.input(|i| i.pointer.any_pressed()) {
+                    let hover = ui.input(|i| i.pointer.hover_pos());
+                    if hover.map_or(true, |pos| !rect.contains(pos)) {
+                        close_menu = true;
+                    }
+                }
+            }
+        }
+
+        if close_menu {
+            self.node_menu_open = false;
+            self.node_menu_node = None;
+        }
+
+        changed
+    }
+
+    fn update_dragged_node_from_positions(
+        &mut self,
+        ui: &Ui,
+        prev_positions: &HashMap<egui_snarl::NodeId, Pos2>,
+    ) {
+        let pointer_down = ui.input(|i| i.pointer.button_down(egui::PointerButton::Primary));
+        if !pointer_down {
+            return;
+        }
+        let mut best = None;
+        let mut best_dist = 0.0;
+        for (node, pos) in &self.prev_snarl_positions {
+            let Some(prev) = prev_positions.get(node) else {
+                continue;
+            };
+            let dist = (*pos - *prev).length_sq();
+            if dist > best_dist {
+                best_dist = dist;
+                best = Some(*node);
+            }
+        }
+        if best_dist > 0.5 {
+            self.last_dragged_node = best;
         }
     }
 
@@ -518,17 +651,26 @@ impl NodeGraphState {
     }
 
     fn handle_drop_on_wire(&mut self, ui: &Ui, graph: &mut Graph) -> bool {
-        if !ui.input(|i| i.pointer.any_released()) {
+        if !ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary)) {
             return false;
         }
-        let Some(drop_pos) = ui.input(|i| i.pointer.interact_pos()) else {
+        let Some(drop_pos) = ui
+            .input(|i| i.pointer.latest_pos().or_else(|| i.pointer.interact_pos()))
+        else {
             return false;
         };
-        let Some(moved_node) = self.dragging_node.or_else(|| self.find_moved_node()) else {
+        let moved_node = self
+            .last_dragged_node
+            .take()
+            .or(self.dragging_node)
+            .or_else(|| self.find_moved_node());
+        if moved_node.is_none() {
             return false;
-        };
+        }
+        let moved_node = moved_node.unwrap();
         self.dragging_node = None;
-        let Some((out_pin, in_pin)) = self.find_wire_hit(graph, drop_pos) else {
+        let (wire_hit, _wire_dist) = self.find_wire_hit_with_dist(graph, drop_pos);
+        let Some((out_pin, in_pin)) = wire_hit else {
             return false;
         };
         if out_pin.node == moved_node || in_pin.node == moved_node {
@@ -573,7 +715,11 @@ impl NodeGraphState {
         best
     }
 
-    fn find_wire_hit(&self, graph: &Graph, pos: Pos2) -> Option<(OutPinId, InPinId)> {
+    fn find_wire_hit_with_dist(
+        &self,
+        graph: &Graph,
+        pos: Pos2,
+    ) -> (Option<(OutPinId, InPinId)>, f32) {
         let mut best = None;
         let mut best_dist = f32::MAX;
         let threshold = 28.0;
@@ -584,17 +730,19 @@ impl NodeGraphState {
             let Some(in_pos) = self.pin_pos_for_input(graph, in_pin) else {
                 continue;
             };
-            let dist = point_segment_distance(pos, out_pos, in_pos)
-                .min(point_bezier_distance(pos, out_pos, in_pos));
+            let dist = point_snarl_wire_distance(pos, out_pos, in_pos);
             if dist < threshold && dist < best_dist {
                 best = Some((out_pin, in_pin));
                 best_dist = dist;
             }
         }
-        best
+        (best, best_dist)
     }
 
     fn pin_pos_for_output(&self, graph: &Graph, pin: OutPinId) -> Option<Pos2> {
+        if let Some(pos) = self.output_pin_positions.borrow().get(&pin).copied() {
+            return Some(pos);
+        }
         let rect = self.node_ui_rects.get(&pin.node)?;
         let core_id = *self.snarl_to_core.get(&pin.node)?;
         let node = graph.node(core_id)?;
@@ -604,6 +752,9 @@ impl NodeGraphState {
     }
 
     fn pin_pos_for_input(&self, graph: &Graph, pin: InPinId) -> Option<Pos2> {
+        if let Some(pos) = self.input_pin_positions.borrow().get(&pin).copied() {
+            return Some(pos);
+        }
         let rect = self.node_ui_rects.get(&pin.node)?;
         let core_id = *self.snarl_to_core.get(&pin.node)?;
         let node = graph.node(core_id)?;
