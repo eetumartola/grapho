@@ -2,9 +2,6 @@ use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
-#[cfg(not(target_arch = "wasm32"))]
-use tobj;
-
 use glam::{EulerRot, Mat4, Quat, Vec3};
 
 use crate::attributes::{AttributeDomain, AttributeStorage};
@@ -286,7 +283,7 @@ pub fn compute_mesh_node(
         }
         BuiltinNodeKind::Transform => {
             let input = inputs
-                .get(0)
+                .first()
                 .cloned()
                 .ok_or_else(|| "Transform requires a mesh input".to_string())?;
             let translate = param_vec3(params, "translate", [0.0, 0.0, 0.0]);
@@ -313,7 +310,7 @@ pub fn compute_mesh_node(
         }
         BuiltinNodeKind::CopyToPoints => {
             let source = inputs
-                .get(0)
+                .first()
                 .cloned()
                 .ok_or_else(|| "Copy to Points requires a source mesh".to_string())?;
             let template = inputs
@@ -368,7 +365,7 @@ pub fn compute_mesh_node(
         }
         BuiltinNodeKind::Scatter => {
             let input = inputs
-                .get(0)
+                .first()
                 .cloned()
                 .ok_or_else(|| "Scatter requires a mesh input".to_string())?;
             let count = param_int(params, "count", 200).max(0) as usize;
@@ -377,7 +374,7 @@ pub fn compute_mesh_node(
         }
         BuiltinNodeKind::Normal => {
             let mut input = inputs
-                .get(0)
+                .first()
                 .cloned()
                 .ok_or_else(|| "Normal requires a mesh input".to_string())?;
             let threshold = param_float(params, "threshold_deg", 60.0).clamp(0.0, 180.0);
@@ -388,7 +385,7 @@ pub fn compute_mesh_node(
         }
         BuiltinNodeKind::Color => {
             let mut input = inputs
-                .get(0)
+                .first()
                 .cloned()
                 .ok_or_else(|| "Color requires a mesh input".to_string())?;
             let color = param_vec3(params, "color", [1.0, 1.0, 1.0]);
@@ -407,7 +404,7 @@ pub fn compute_mesh_node(
         }
         BuiltinNodeKind::Output => {
             let input = inputs
-                .get(0)
+                .first()
                 .cloned()
                 .ok_or_else(|| "Output requires a mesh input".to_string())?;
             Ok(input)

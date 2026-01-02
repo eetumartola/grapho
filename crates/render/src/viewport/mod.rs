@@ -40,6 +40,9 @@ pub struct ViewportDebug {
     pub shading_mode: ViewportShadingMode,
     pub depth_near: f32,
     pub depth_far: f32,
+    pub show_points: bool,
+    pub point_size: f32,
+    pub key_shadows: bool,
 }
 
 #[derive(Debug, Clone, Copy)]

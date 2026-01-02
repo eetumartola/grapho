@@ -19,11 +19,13 @@ It should initially have a 3D viewport and a DAG node view, with options for fut
 ### Rendering
 
 * **wgpu** for the viewport
-* Shading: **"simple lit"**:
+* Shading: **"simple lit"** (moving toward three-point lighting):
 
   * directional light + ambient
+  * later: classic three-point lighting with optional shadows on the key light
   * optional image-based ambient later
   * support for vertex normals, optional roughness-like control without full PBR
+* Point rendering mode for point-only geometry
 
 ### Utilities
 
@@ -74,12 +76,16 @@ It should initially have a 3D viewport and a DAG node view, with options for fut
 * Shading pipelines:
 
   * Lit pipeline (Lambert + specular term)
+  * Three-point lighting (key/fill/rim) with optional shadows on key
+  * Point rendering pipeline (for point/point-only meshes)
   * Wireframe/lines pipeline (optional)
 * Debug overlays renderer (grid/axes/bounds/normals)
+* Viewport overlay icons (toggleable controls for render features)
 
 ### 3) `app` crate (egui + orchestration)
 
 * Window layout: Viewport / Node graph, plus optional Inspector / Debug / Console panels
+* Viewport split: main viewport + attribute spreadsheet (draggable divider)
 * State:
 
   * UI state (panels, selection in node graph, camera settings)
@@ -261,6 +267,23 @@ Deliverables:
 * Better error UX (node tinted, error message in node footer)
 * Keyboard add-node menu (Tab) and more forgiving pin hit targets
 
+### Milestone 6b " Node expansion + viewport UX
+
+Deliverables:
+
+* New nodes:
+
+  * `OBJ Output` (export mesh)
+  * `Copy/Transform` (duplicate with transforms)
+  * `Noise/Mountain` (displace along normals)
+  * `Attribute Math` (basic arithmetic on attributes)
+* Viewport:
+
+  * three-point lighting (key/fill/rim) with optional key shadows
+  * point rendering mode
+  * toggle icons on viewport edge
+* Attribute spreadsheet panel (vertex/point/prim/detail toggle) via a draggable split
+
 ### Milestone 7 " Web build (secondary)
 
 Deliverables:
@@ -310,3 +333,4 @@ Deliverables:
 * Node info panel shows counts/bounds/attributes; RMB menu restored for node actions.
 * Web build is functional via `build_web.ps1` + wasm-bindgen output (static server required).
 * Debug panel shows dirty-node reasons (param vs upstream changes).
+* New work queued: OBJ Output, Copy/Transform, Noise/Mountain, Attribute Math, point rendering, three-point lighting + shadows, viewport icons, attribute spreadsheet split.

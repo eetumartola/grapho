@@ -7,7 +7,6 @@ use egui_snarl::ui::{BackgroundPattern, SnarlStyle};
 use egui_snarl::{InPinId, OutPinId, Snarl};
 
 use grapho_core::{BuiltinNodeKind, Graph, NodeId, PinId, PinKind};
-use tracing;
 
 use super::menu::builtin_menu_items;
 use super::params::edit_param;
@@ -49,6 +48,7 @@ pub struct NodeGraphState {
     node_menu_open: bool,
     node_menu_screen_pos: Pos2,
     node_menu_node: Option<NodeId>,
+    last_changed: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -96,6 +96,7 @@ impl Default for NodeGraphState {
             node_menu_open: false,
             node_menu_screen_pos: Pos2::new(0.0, 0.0),
             node_menu_node: None,
+            last_changed: false,
         }
     }
 }
@@ -103,6 +104,12 @@ impl Default for NodeGraphState {
 pub(super) struct NodeMenuRequest {
     pub(super) node_id: NodeId,
     pub(super) screen_pos: Pos2,
+}
+
+#[derive(Clone, Default, PartialEq)]
+pub struct NodeGraphLayout {
+    pub positions: HashMap<NodeId, Pos2>,
+    pub selected: Option<NodeId>,
 }
 
 impl NodeGraphState {
@@ -127,6 +134,7 @@ impl NodeGraphState {
             .collect();
         self.input_pin_positions.borrow_mut().clear();
         self.output_pin_positions.borrow_mut().clear();
+        self.last_changed = false;
 
         let mut viewer = NodeGraphViewer {
             graph,
@@ -158,23 +166,24 @@ impl NodeGraphState {
             ..SnarlStyle::default()
         };
         self.snarl.show(&mut viewer, &style, "node_graph", ui);
+        self.last_changed |= viewer.changed;
 
         if viewer.changed {
             *eval_dirty = true;
             self.needs_wire_sync = true;
         }
 
-        if self.add_menu_open {
-            if self.show_add_menu(ui, graph) {
-                *eval_dirty = true;
-                self.needs_wire_sync = true;
-            }
+        if self.add_menu_open && self.show_add_menu(ui, graph) {
+            self.last_changed = true;
+            *eval_dirty = true;
+            self.needs_wire_sync = true;
         }
 
         self.update_drag_state(ui);
         self.update_dragged_node_from_positions(ui, &prev_positions);
 
         if self.handle_drop_on_wire(ui, graph) {
+            self.last_changed = true;
             *eval_dirty = true;
             self.needs_wire_sync = true;
         }
@@ -184,12 +193,47 @@ impl NodeGraphState {
             self.node_menu_node = Some(request.node_id);
             self.node_menu_screen_pos = request.screen_pos;
         }
-        if self.node_menu_open {
-            if self.show_node_menu(ui, graph) {
-                *eval_dirty = true;
-                self.needs_wire_sync = true;
-            }
+        if self.node_menu_open && self.show_node_menu(ui, graph) {
+            self.last_changed = true;
+            *eval_dirty = true;
+            self.needs_wire_sync = true;
         }
+    }
+
+    pub fn take_changed(&mut self) -> bool {
+        let changed = self.last_changed;
+        self.last_changed = false;
+        changed
+    }
+
+    pub fn layout_snapshot(&self) -> NodeGraphLayout {
+        let mut positions = HashMap::new();
+        for (_, pos, node) in self.snarl.nodes_pos_ids() {
+            positions.insert(node.core_id, pos);
+        }
+        NodeGraphLayout {
+            positions,
+            selected: self.selected_node,
+        }
+    }
+
+    pub fn restore_layout(&mut self, graph: &Graph, layout: &NodeGraphLayout) {
+        self.reset();
+        for node in graph.nodes() {
+            let pos = layout
+                .positions
+                .get(&node.id)
+                .copied()
+                .unwrap_or(self.next_pos);
+            let snarl_id = self.snarl.insert_node(pos, SnarlNode { core_id: node.id });
+            self.core_to_snarl.insert(node.id, snarl_id);
+            self.snarl_to_core.insert(snarl_id, node.id);
+            self.advance_pos();
+        }
+        self.selected_node = layout
+            .selected
+            .filter(|selected| graph.node(*selected).is_some());
+        self.needs_wire_sync = true;
     }
 
     fn show_node_menu(&mut self, ui: &mut Ui, graph: &mut Graph) -> bool {
@@ -238,7 +282,7 @@ impl NodeGraphState {
             if let Some(rect) = menu_rect {
                 if ui.input(|i| i.pointer.any_pressed()) {
                     let hover = ui.input(|i| i.pointer.hover_pos());
-                    if hover.map_or(true, |pos| !rect.contains(pos)) {
+                    if hover.is_none_or(|pos| !rect.contains(pos)) {
                         close_menu = true;
                     }
                 }
@@ -320,16 +364,16 @@ impl NodeGraphState {
 
         let box_out = graph
             .node(box_id)
-            .and_then(|node| node.outputs.get(0).copied());
+            .and_then(|node| node.outputs.first().copied());
         let transform_in = graph
             .node(transform_id)
-            .and_then(|node| node.inputs.get(0).copied());
+            .and_then(|node| node.inputs.first().copied());
         let transform_out = graph
             .node(transform_id)
-            .and_then(|node| node.outputs.get(0).copied());
+            .and_then(|node| node.outputs.first().copied());
         let output_in = graph
             .node(output_id)
-            .and_then(|node| node.inputs.get(0).copied());
+            .and_then(|node| node.inputs.first().copied());
 
         if let (Some(box_out), Some(transform_in), Some(transform_out), Some(output_in)) =
             (box_out, transform_in, transform_out, output_in)
@@ -467,10 +511,8 @@ impl NodeGraphState {
         let mut changed = false;
         for (key, value) in params {
             let (next_value, did_change) = edit_param(ui, &key, value);
-            if did_change {
-                if graph.set_param(node_id, key, next_value).is_ok() {
-                    changed = true;
-                }
+            if did_change && graph.set_param(node_id, key, next_value).is_ok() {
+                changed = true;
             }
         }
 
@@ -593,7 +635,7 @@ impl NodeGraphState {
             if let Some(rect) = menu_rect {
                 if ui.input(|i| i.pointer.any_pressed()) {
                     let hover = ui.input(|i| i.pointer.hover_pos());
-                    if hover.map_or(true, |pos| !rect.contains(pos)) {
+                    if hover.is_none_or(|pos| !rect.contains(pos)) {
                         close_menu = true;
                     }
                 }

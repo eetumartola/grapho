@@ -69,22 +69,22 @@ pub fn evaluate_mesh_graph(
             | crate::nodes_builtin::BuiltinNodeKind::Scatter
             | crate::nodes_builtin::BuiltinNodeKind::Color
             | crate::nodes_builtin::BuiltinNodeKind::Output => {
-                if let Some(mesh) = input_meshes.get(0).and_then(|mesh| mesh.clone()) {
+                if let Some(mesh) = input_meshes.first().and_then(|mesh| mesh.clone()) {
                     vec![mesh]
                 } else {
                     let name = input_names
-                        .get(0)
+                        .first()
                         .cloned()
                         .unwrap_or_else(|| "in".to_string());
                     return Err(format!("missing input '{}'", name));
                 }
             }
             crate::nodes_builtin::BuiltinNodeKind::CopyToPoints => {
-                let source = input_meshes.get(0).and_then(|mesh| mesh.clone());
+                let source = input_meshes.first().and_then(|mesh| mesh.clone());
                 let template = input_meshes.get(1).and_then(|mesh| mesh.clone());
                 if source.is_none() {
                     let name = input_names
-                        .get(0)
+                        .first()
                         .cloned()
                         .unwrap_or_else(|| "source".to_string());
                     return Err(format!("missing input '{}'", name));
@@ -99,7 +99,7 @@ pub fn evaluate_mesh_graph(
                 vec![source.unwrap(), template.unwrap()]
             }
             crate::nodes_builtin::BuiltinNodeKind::Merge => {
-                input_meshes.into_iter().filter_map(|mesh| mesh).collect()
+                input_meshes.into_iter().flatten().collect()
             }
             _ => Vec::new(),
         };

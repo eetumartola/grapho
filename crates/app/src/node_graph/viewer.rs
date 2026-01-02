@@ -7,7 +7,6 @@ use egui_snarl::ui::{AnyPins, PinInfo, SnarlPin, SnarlViewer};
 use egui_snarl::{InPinId, OutPinId, Snarl};
 
 use grapho_core::{default_params, node_definition, BuiltinNodeKind, Graph, NodeId, PinId};
-use tracing;
 
 use super::menu::builtin_menu_items;
 use super::state::{GraphTransformState, NodeInfoRequest, PendingWire, SnarlNode};

@@ -46,6 +46,10 @@ impl AttributeStorage {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn data_type(&self) -> AttributeType {
         match self {
             AttributeStorage::Float(_) => AttributeType::Float,
@@ -107,6 +111,10 @@ impl<'a> AttributeRef<'a> {
             AttributeRef::Vec3(values) => values.len(),
             AttributeRef::Vec4(values) => values.len(),
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn data_type(&self) -> AttributeType {

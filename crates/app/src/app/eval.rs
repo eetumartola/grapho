@@ -125,6 +125,9 @@ impl GraphoApp {
             shading_mode,
             depth_near: self.project.settings.render_debug.depth_near,
             depth_far: self.project.settings.render_debug.depth_far,
+            show_points: self.project.settings.render_debug.show_points,
+            point_size: self.project.settings.render_debug.point_size,
+            key_shadows: self.project.settings.render_debug.key_shadows,
         }
     }
 }

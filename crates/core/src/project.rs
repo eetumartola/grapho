@@ -25,6 +25,7 @@ impl Default for Project {
 #[serde(default)]
 pub struct ProjectSettings {
     pub viewport_split: f32,
+    pub viewport_sheet_split: f32,
     pub node_params_split: f32,
     pub panels: PanelSettings,
     pub camera: CameraSettings,
@@ -35,6 +36,7 @@ impl Default for ProjectSettings {
     fn default() -> Self {
         Self {
             viewport_split: 0.5,
+            viewport_sheet_split: 0.75,
             node_params_split: 0.25,
             panels: PanelSettings::default(),
             camera: CameraSettings::default(),
@@ -96,6 +98,9 @@ pub struct RenderDebugSettings {
     pub show_bounds: bool,
     pub normal_length: f32,
     pub show_stats: bool,
+    pub show_points: bool,
+    pub point_size: f32,
+    pub key_shadows: bool,
     pub shading_mode: ShadingMode,
     pub depth_near: f32,
     pub depth_far: f32,
@@ -110,6 +115,9 @@ impl Default for RenderDebugSettings {
             show_bounds: false,
             normal_length: 0.3,
             show_stats: true,
+            show_points: false,
+            point_size: 4.0,
+            key_shadows: false,
             shading_mode: ShadingMode::Lit,
             depth_near: 0.5,
             depth_far: 20.0,

@@ -4,4 +4,4 @@ mod state;
 mod utils;
 mod viewer;
 
-pub use state::NodeGraphState;
+pub use state::{NodeGraphLayout, NodeGraphState};

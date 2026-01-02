@@ -80,17 +80,18 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
                 let available = ui.available_width();
                 let value_width = ((available - spacing) / 2.0).clamp(56.0, 120.0);
                 let height = ui.spacing().interact_size.y;
-                for idx in 0..2 {
+                let len = v.len();
+                for (idx, item) in v.iter_mut().enumerate() {
                     if ui
                         .add_sized(
                             [value_width, height],
-                            egui::DragValue::new(&mut v[idx]).speed(0.1),
+                            egui::DragValue::new(item).speed(0.1),
                         )
                         .changed()
                     {
                         changed = true;
                     }
-                    if idx < 1 {
+                    if idx + 1 < len {
                         ui.add_space(spacing);
                     }
                 }
@@ -105,17 +106,18 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
                 let available = ui.available_width();
                 let value_width = ((available - spacing * 2.0) / 3.0).clamp(52.0, 110.0);
                 let height = ui.spacing().interact_size.y;
-                for idx in 0..3 {
+                let len = v.len();
+                for (idx, item) in v.iter_mut().enumerate() {
                     if ui
                         .add_sized(
                             [value_width, height],
-                            egui::DragValue::new(&mut v[idx]).speed(0.1),
+                            egui::DragValue::new(item).speed(0.1),
                         )
                         .changed()
                     {
                         changed = true;
                     }
-                    if idx < 2 {
+                    if idx + 1 < len {
                         ui.add_space(spacing);
                     }
                 }

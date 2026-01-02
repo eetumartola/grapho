@@ -15,6 +15,8 @@ impl GraphoApp {
         self.project = Project::default();
         self.project_path = None;
         self.node_graph.reset();
+        self.undo_stack.clear();
+        self.pending_undo = None;
         self.eval_dirty = true;
         self.pending_scene = None;
         tracing::info!("new project created");
@@ -44,6 +46,8 @@ impl GraphoApp {
         self.project = project;
         self.project_path = Some(path.to_path_buf());
         self.node_graph.reset();
+        self.undo_stack.clear();
+        self.pending_undo = None;
         self.eval_dirty = true;
         self.pending_scene = None;
         Ok(())

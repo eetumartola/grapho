@@ -147,6 +147,26 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Changing a parameter that doesn't alter geometry doesn't reupload buffers
 * Mesh updates don't leak GPU memory over repeated changes
 
+### C5. Point rendering mode
+
+**Depends:** C3, F1
+
+* Render points when mesh has points-only topology
+* Toggleable point rendering mode in viewport UI
+  **Acceptance**
+* Point-only meshes render visibly in viewport
+* Toggle enables/disables point rendering without restart
+
+### C6. Three-point lighting + key shadows
+
+**Depends:** C3
+
+* Classic key/fill/rim lights with configurable intensities
+* Optional shadow mapping on key light (can be off by default)
+  **Acceptance**
+* Lighting reads as three-point with clear separation
+* Shadow toggle affects key light only and is stable
+
 ---
 
 ## Epic D " Debug display options (render + stats)
@@ -388,6 +408,46 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Loads positions/indices with normals when present
 * UVs are imported as attributes when available
 
+### F14. OBJ Output node
+
+**Depends:** F1, E1
+
+* Write mesh to OBJ on disk (native builds)
+* Parameters: path, triangulate toggle (if needed)
+  **Acceptance**
+* Produces a readable OBJ with positions/indices
+* Error shown on missing path or write failure
+
+### F15. Copy/Transform node
+
+**Depends:** F1, E1
+
+* Duplicate mesh with count + transform (translate/rotate/scale)
+* Supports per-copy offset or step parameters
+  **Acceptance**
+* Produces multiple copies with deterministic transforms
+* Works with empty input (error surfaced)
+
+### F16. Noise/Mountain node
+
+**Depends:** F1, E1
+
+* Displace along normals using noise
+* Parameters: amplitude, frequency, seed, offset
+  **Acceptance**
+* Displacement visible and stable for fixed seed
+* Works on triangle meshes with normals
+
+### F17. Attribute Math node
+
+**Depends:** F10, E1
+
+* Basic arithmetic on attributes (add/mul/sub/div, clamp)
+* Operates on a chosen domain; supports attribute + constant
+  **Acceptance**
+* Writes output attribute with correct domain + size
+* Errors clearly when inputs are missing or mismatched
+
 ---
 
 ## Epic G " egui-snarl node editor integration
@@ -436,6 +496,31 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 * Dropped wire opens add-node menu and auto-connects on create (done)
   **Acceptance**
 * Editing feels stable and predictable at ~200 nodes
+
+---
+
+## Epic N " Viewport UI + attribute spreadsheet
+
+### N1. Viewport edge toggles
+
+**Depends:** B1, C3
+
+* Compact icon toggles near viewport edge for render features
+* Reflect active state (lit/points/shadows/overlays)
+  **Acceptance**
+* Icons toggle features immediately and persist in settings
+* States are visually clear without opening Debug panel
+
+### N2. Viewport split + spreadsheet
+
+**Depends:** B1, F10
+
+* Split viewport area with draggable divider
+* Spreadsheet shows attributes for selected node
+* Domain toggle: vertex/point/prim/detail
+  **Acceptance**
+* Spreadsheet updates on node selection
+* Domain filter switches the attribute list correctly
 
 ---
 
@@ -504,6 +589,7 @@ Below is a GitHub-issues-style backlog, aligned to the revised plan (egui-snarl,
 ### J1. Command system (graph + params)
 
 **Depends:** G1, G2
+**Status:** in progress
 
 * Commands: add node, delete node, add link, delete link, change param
 * Undo stack

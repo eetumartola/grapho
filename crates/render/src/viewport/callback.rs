@@ -7,9 +7,11 @@ use std::time::Instant;
 
 use egui::epaint::Rect;
 use egui_wgpu::{CallbackResources, CallbackTrait};
+use egui_wgpu::wgpu::util::DeviceExt as _;
 
 use crate::camera::{camera_position, camera_view_proj, CameraState};
-use super::mesh::normals_vertices;
+use glam::{Mat4, Vec3};
+use super::mesh::{normals_vertices, point_cross_vertices};
 use super::pipeline::{
     apply_scene_to_pipeline, ensure_offscreen_targets, PipelineState, Uniforms,
 };
@@ -41,14 +43,14 @@ impl CallbackTrait for ViewportCallback {
         let camera_pos = camera_position(self.camera);
         let target = glam::Vec3::from(self.camera.target);
         let forward = (target - camera_pos).normalize_or_zero();
-        let mut right = forward.cross(glam::Vec3::Y).normalize_or_zero();
+        let mut right = forward.cross(Vec3::Y).normalize_or_zero();
         if right.length_squared() == 0.0 {
-            right = glam::Vec3::X;
+            right = Vec3::X;
         }
         let up = right.cross(forward).normalize_or_zero();
-        let light_dir = (-forward + right * 0.6 + up * 0.8)
-            .normalize_or_zero()
-            .to_array();
+        let key_dir = (-forward + right * 0.6 + up * 0.8).normalize_or_zero();
+        let fill_dir = (-forward - right * 0.4 + up * 0.2).normalize_or_zero();
+        let rim_dir = (forward + up * 0.6).normalize_or_zero();
         let shading_mode = match self.debug.shading_mode {
             ViewportShadingMode::Lit => 0.0,
             ViewportShadingMode::Normals => 1.0,
@@ -85,18 +87,34 @@ impl CallbackTrait for ViewportCallback {
                 }
             }
 
+            let light_view_proj =
+                light_view_projection(pipeline.mesh_bounds, key_dir);
+            let shadow_enabled = self.debug.key_shadows && pipeline.index_count > 0;
+
             let uniforms = Uniforms {
                 view_proj: view_proj.to_cols_array_2d(),
-                light_dir,
+                light_view_proj: light_view_proj.to_cols_array_2d(),
+                key_dir: key_dir.to_array(),
                 _pad0: 0.0,
-                camera_pos: camera_pos.to_array(),
+                fill_dir: fill_dir.to_array(),
                 _pad1: 0.0,
-                base_color: pipeline.base_color,
+                rim_dir: rim_dir.to_array(),
                 _pad2: 0.0,
+                camera_pos: camera_pos.to_array(),
+                _pad3: 0.0,
+                base_color: pipeline.base_color,
+                _pad4: 0.0,
+                light_params: [1.0, 0.45, 0.5, 0.15],
                 debug_params: [
                     shading_mode,
                     self.debug.depth_near,
                     self.debug.depth_far,
+                    self.debug.point_size,
+                ],
+                shadow_params: [
+                    if shadow_enabled { 1.0 } else { 0.0 },
+                    0.002,
+                    0.0,
                     0.0,
                 ],
             };
@@ -145,11 +163,42 @@ impl CallbackTrait for ViewportCallback {
                 stats_state.stats.triangle_count = pipeline.index_count / 3;
             }
 
-            let mesh = if pipeline.index_count > 0 {
-                pipeline.mesh_cache.get(pipeline.mesh_id)
-            } else {
+            let mesh = if pipeline.mesh_vertices.is_empty() {
                 None
+            } else {
+                pipeline.mesh_cache.get(pipeline.mesh_id)
             };
+            if shadow_enabled {
+                if let Some(mesh) = &mesh {
+                    let mut shadow_pass = _egui_encoder.begin_render_pass(
+                        &egui_wgpu::wgpu::RenderPassDescriptor {
+                            label: Some("grapho_shadow_pass"),
+                            color_attachments: &[],
+                            depth_stencil_attachment: Some(
+                                egui_wgpu::wgpu::RenderPassDepthStencilAttachment {
+                                    view: &pipeline.shadow_view,
+                                    depth_ops: Some(egui_wgpu::wgpu::Operations {
+                                        load: egui_wgpu::wgpu::LoadOp::Clear(1.0),
+                                        store: egui_wgpu::wgpu::StoreOp::Store,
+                                    }),
+                                    stencil_ops: None,
+                                },
+                            ),
+                            occlusion_query_set: None,
+                            timestamp_writes: None,
+                        },
+                    );
+                    shadow_pass.set_pipeline(&pipeline.shadow_pipeline);
+                    shadow_pass.set_bind_group(0, &pipeline.shadow_bind_group, &[]);
+                    shadow_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                    shadow_pass.set_index_buffer(
+                        mesh.index_buffer.slice(..),
+                        egui_wgpu::wgpu::IndexFormat::Uint32,
+                    );
+                    shadow_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+                }
+            }
+
             let mut render_pass =
                 _egui_encoder.begin_render_pass(&egui_wgpu::wgpu::RenderPassDescriptor {
                     label: Some("grapho_viewport_offscreen"),
@@ -183,18 +232,44 @@ impl CallbackTrait for ViewportCallback {
 
             render_pass.set_viewport(0.0, 0.0, width as f32, height as f32, 0.0, 1.0);
             if let Some(mesh) = mesh {
-                render_pass.set_pipeline(&pipeline.mesh_pipeline);
-                render_pass.set_bind_group(0, &pipeline.uniform_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(
-                    mesh.index_buffer.slice(..),
-                    egui_wgpu::wgpu::IndexFormat::Uint32,
-                );
-                render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+                if !self.debug.show_points && pipeline.index_count > 0 {
+                    render_pass.set_pipeline(&pipeline.mesh_pipeline);
+                    render_pass.set_bind_group(0, &pipeline.uniform_bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(
+                        mesh.index_buffer.slice(..),
+                        egui_wgpu::wgpu::IndexFormat::Uint32,
+                    );
+                    render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+                }
             }
 
             render_pass.set_pipeline(&pipeline.line_pipeline);
             render_pass.set_bind_group(0, &pipeline.uniform_bind_group, &[]);
+
+            if self.debug.show_points || pipeline.index_count == 0 {
+                let camera_distance = (camera_pos - Vec3::from(self.camera.target)).length();
+                let desired_size = (self.debug.point_size.max(1.0) * camera_distance * 0.002)
+                    .clamp(0.0005, 2.0);
+                if pipeline.point_size < 0.0
+                    || (desired_size - pipeline.point_size).abs() > 0.0001
+                {
+                    let point_vertices =
+                        point_cross_vertices(&pipeline.point_positions, desired_size);
+                    pipeline.point_buffer =
+                        device.create_buffer_init(&egui_wgpu::wgpu::util::BufferInitDescriptor {
+                            label: Some("grapho_point_vertices"),
+                            contents: bytemuck::cast_slice(&point_vertices),
+                            usage: egui_wgpu::wgpu::BufferUsages::VERTEX,
+                        });
+                    pipeline.point_count = point_vertices.len() as u32;
+                    pipeline.point_size = desired_size;
+                }
+                if pipeline.point_count > 0 {
+                    render_pass.set_vertex_buffer(0, pipeline.point_buffer.slice(..));
+                    render_pass.draw(0..pipeline.point_count, 0..1);
+                }
+            }
 
             if self.debug.show_grid && pipeline.grid_count > 0 {
                 render_pass.set_vertex_buffer(0, pipeline.grid_buffer.slice(..));
@@ -258,4 +333,33 @@ impl CallbackTrait for ViewportCallback {
         render_pass.set_bind_group(0, &pipeline.blit_bind_group, &[]);
         render_pass.draw(0..3, 0..1);
     }
+}
+
+fn light_view_projection(bounds: ([f32; 3], [f32; 3]), key_dir: Vec3) -> Mat4 {
+    let min = Vec3::from(bounds.0);
+    let max = Vec3::from(bounds.1);
+    let center = (min + max) * 0.5;
+    let extent = (max - min) * 0.5;
+    let radius = extent.length().max(0.5);
+
+    let dir = if key_dir.length_squared() > 0.0001 {
+        key_dir.normalize()
+    } else {
+        Vec3::new(0.6, 1.0, 0.2).normalize()
+    };
+    let light_pos = center - dir * radius * 4.0;
+    let mut up = Vec3::Y;
+    if dir.abs().dot(up) > 0.9 {
+        up = Vec3::Z;
+    }
+    let view = Mat4::look_at_rh(light_pos, center, up);
+    let ortho = Mat4::orthographic_rh(
+        -radius,
+        radius,
+        -radius,
+        radius,
+        -radius * 6.0,
+        radius * 6.0,
+    );
+    ortho * view
 }

@@ -2,11 +2,31 @@ use eframe::egui;
 use grapho_core::ShadingMode;
 
 use super::node_info::NodeInfoPanel;
+use super::spreadsheet::show_spreadsheet;
 use super::GraphoApp;
 
 impl eframe::App for GraphoApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.sync_wgpu_renderer(frame);
+        let pointer_down = ctx.input(|i| i.pointer.button_down(egui::PointerButton::Primary));
+        if ctx.input(|i| i.pointer.any_released()) {
+            self.flush_pending_undo();
+        }
+        if !ctx.wants_keyboard_input() {
+            let undo_pressed = ctx.input(|i| {
+                i.key_pressed(egui::Key::Z) && i.modifiers.command && !i.modifiers.shift
+            });
+            let redo_pressed = ctx.input(|i| {
+                (i.key_pressed(egui::Key::Z) && i.modifiers.command && i.modifiers.shift)
+                    || (i.key_pressed(egui::Key::Y) && i.modifiers.command)
+            });
+            if undo_pressed {
+                self.try_undo();
+            } else if redo_pressed {
+                self.try_redo();
+            }
+        }
+        let mut undo_pushed = false;
         let tab_pressed = ctx.input(|i| i.key_pressed(egui::Key::Tab));
         if tab_pressed {
             let hover_pos = ctx.input(|i| i.pointer.hover_pos());
@@ -128,6 +148,26 @@ impl eframe::App for GraphoApp {
                                     "Bounds",
                                 );
                                 ui.checkbox(
+                                    &mut self.project.settings.render_debug.show_points,
+                                    "Points",
+                                );
+                                if self.project.settings.render_debug.show_points {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Point size");
+                                        ui.add(
+                                            egui::DragValue::new(
+                                                &mut self.project.settings.render_debug.point_size,
+                                            )
+                                            .speed(0.5)
+                                            .range(1.0..=24.0),
+                                        );
+                                    });
+                                }
+                                ui.checkbox(
+                                    &mut self.project.settings.render_debug.key_shadows,
+                                    "Key shadows",
+                                );
+                                ui.checkbox(
                                     &mut self.project.settings.render_debug.show_stats,
                                     "Stats overlay",
                                 );
@@ -188,8 +228,13 @@ impl eframe::App for GraphoApp {
                                 ui.separator();
                                 ui.label("Evaluation");
                                 if ui.button("Create demo graph").clicked() {
+                                    let snapshot = self.snapshot_undo();
                                     self.node_graph.add_demo_graph(&mut self.project.graph);
                                     self.mark_eval_dirty();
+                                    if !undo_pushed {
+                                        self.queue_undo_snapshot(snapshot, pointer_down);
+                                        undo_pushed = true;
+                                    }
                                 }
                                 if ui.button("Recompute now").clicked() {
                                     self.eval_dirty = false;
@@ -299,56 +344,175 @@ impl eframe::App for GraphoApp {
             };
 
             ui.scope_builder(egui::UiBuilder::new().max_rect(left_rect), |ui| {
-                let available = ui.available_size();
-                let (rect, response) =
-                    ui.allocate_exact_size(available, egui::Sense::click_and_drag());
-                self.handle_viewport_input(&response);
-                ui.painter()
-                    .rect_filled(rect, 0.0, egui::Color32::from_rgb(28, 28, 28));
-                if let Some(renderer) = &self.viewport_renderer {
-                    let camera = self.camera_state();
-                    let debug = self.viewport_debug();
-                    let callback = renderer.paint_callback(rect, camera, debug);
-                    ui.painter().add(egui::Shape::Callback(callback));
+                let full = ui.available_rect_before_wrap();
+                let separator_height = 1.0;
+                let min_sheet = 140.0;
+                let min_viewport = 220.0;
+                let total_height = full.height();
+                let mut viewport_height = (total_height
+                    * self.project.settings.viewport_sheet_split.clamp(0.3, 0.9))
+                .clamp(min_viewport, (total_height - min_sheet).max(min_viewport));
+                if total_height <= min_viewport + min_sheet + separator_height {
+                    viewport_height = total_height.max(min_viewport);
+                }
+                let sheet_height = (total_height - viewport_height - separator_height).max(0.0);
+                let viewport_rect = egui::Rect::from_min_size(
+                    full.min,
+                    egui::vec2(full.width(), viewport_height),
+                );
+                let separator_rect = egui::Rect::from_min_size(
+                    egui::pos2(full.min.x, viewport_rect.max.y),
+                    egui::vec2(full.width(), separator_height),
+                );
+                let sheet_rect = egui::Rect::from_min_size(
+                    egui::pos2(full.min.x, separator_rect.max.y),
+                    egui::vec2(full.width(), sheet_height),
+                );
 
-                    if self.project.settings.render_debug.show_stats {
-                        let stats = renderer.stats_snapshot();
-                        let text = format!(
-                            "FPS: {:.1}\nFrame: {:.2} ms\nVerts: {}\nTris: {}\nMeshes: {}\nCache: {} hits / {} misses / {} uploads",
-                            stats.fps,
-                            stats.frame_time_ms,
-                            stats.vertex_count,
-                            stats.triangle_count,
-                            stats.mesh_count,
-                            stats.cache_hits,
-                            stats.cache_misses,
-                            stats.cache_uploads
-                        );
-                        let font_id = egui::FontId::monospace(12.0);
-                        let galley = ui.fonts_mut(|f| {
-                            f.layout_no_wrap(text.clone(), font_id.clone(), egui::Color32::WHITE)
-                        });
-                        let padding = egui::vec2(6.0, 4.0);
-                        let bg_rect = egui::Rect::from_min_size(
-                            rect.min + egui::vec2(8.0, 8.0),
-                            galley.size() + padding * 2.0,
-                        );
-                        let painter = ui.painter();
-                        painter.rect_filled(
-                            bg_rect,
-                            4.0,
-                            egui::Color32::from_black_alpha(160),
-                        );
-                        painter.galley(bg_rect.min + padding, galley, egui::Color32::WHITE);
-                    }
-                } else {
-                    ui.painter().text(
-                        rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        "WGPU not ready",
-                        egui::FontId::proportional(14.0),
-                        egui::Color32::GRAY,
+                if sheet_height > 0.0 {
+                    let sep_response = ui.interact(
+                        separator_rect,
+                        ui.make_persistent_id("viewport_sheet_split"),
+                        egui::Sense::drag(),
                     );
+                    if sep_response.dragged() {
+                        if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                            let local = (pos.y - full.min.y)
+                                .clamp(min_viewport, (total_height - min_sheet).max(min_viewport));
+                            self.project.settings.viewport_sheet_split =
+                                (local / total_height).clamp(0.3, 0.9);
+                        }
+                    }
+                    let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(70, 70, 70));
+                    ui.painter().line_segment(
+                        [
+                            egui::pos2(separator_rect.left(), separator_rect.center().y),
+                            egui::pos2(separator_rect.right(), separator_rect.center().y),
+                        ],
+                        stroke,
+                    );
+                }
+
+                ui.scope_builder(egui::UiBuilder::new().max_rect(viewport_rect), |ui| {
+                    let available = ui.available_size();
+                    let (rect, response) =
+                        ui.allocate_exact_size(available, egui::Sense::click_and_drag());
+                    self.handle_viewport_input(&response);
+                    ui.painter()
+                        .rect_filled(rect, 0.0, egui::Color32::from_rgb(28, 28, 28));
+                    if let Some(renderer) = &self.viewport_renderer {
+                        let camera = self.camera_state();
+                        let debug = self.viewport_debug();
+                        let callback = renderer.paint_callback(rect, camera, debug);
+                        ui.painter().add(egui::Shape::Callback(callback));
+
+                        if self.project.settings.render_debug.show_stats {
+                            let stats = renderer.stats_snapshot();
+                            let text = format!(
+                                "FPS: {:.1}\nFrame: {:.2} ms\nVerts: {}\nTris: {}\nMeshes: {}\nCache: {} hits / {} misses / {} uploads",
+                                stats.fps,
+                                stats.frame_time_ms,
+                                stats.vertex_count,
+                                stats.triangle_count,
+                                stats.mesh_count,
+                                stats.cache_hits,
+                                stats.cache_misses,
+                                stats.cache_uploads
+                            );
+                            let font_id = egui::FontId::monospace(12.0);
+                            let galley = ui.fonts_mut(|f| {
+                                f.layout_no_wrap(text.clone(), font_id.clone(), egui::Color32::WHITE)
+                            });
+                            let padding = egui::vec2(6.0, 4.0);
+                            let bg_rect = egui::Rect::from_min_size(
+                                rect.min + egui::vec2(8.0, 8.0),
+                                galley.size() + padding * 2.0,
+                            );
+                            let painter = ui.painter();
+                            painter.rect_filled(
+                                bg_rect,
+                                4.0,
+                                egui::Color32::from_black_alpha(160),
+                            );
+                            painter.galley(bg_rect.min + padding, galley, egui::Color32::WHITE);
+                        }
+                    } else {
+                        ui.painter().text(
+                            rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            "WGPU not ready",
+                            egui::FontId::proportional(14.0),
+                            egui::Color32::GRAY,
+                        );
+                    }
+
+                    let toolbar_rect = egui::Rect::from_min_size(
+                        egui::pos2(rect.max.x - 36.0, rect.min.y + 8.0),
+                        egui::vec2(28.0, 160.0),
+                    );
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(toolbar_rect), |ui| {
+                        ui.set_min_width(toolbar_rect.width());
+                        ui.visuals_mut().widgets.inactive.bg_fill =
+                            egui::Color32::from_rgb(45, 45, 45);
+                        ui.visuals_mut().widgets.hovered.bg_fill =
+                            egui::Color32::from_rgb(70, 70, 70);
+                        ui.visuals_mut().widgets.active.bg_fill =
+                            egui::Color32::from_rgb(90, 90, 90);
+                        ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+
+                        let debug = &mut self.project.settings.render_debug;
+                        if ui
+                            .add(egui::Button::new("G").selected(debug.show_grid))
+                            .on_hover_text("Grid")
+                            .clicked()
+                        {
+                            debug.show_grid = !debug.show_grid;
+                        }
+                        if ui
+                            .add(egui::Button::new("A").selected(debug.show_axes))
+                            .on_hover_text("Axes")
+                            .clicked()
+                        {
+                            debug.show_axes = !debug.show_axes;
+                        }
+                        if ui
+                            .add(egui::Button::new("P").selected(debug.show_points))
+                            .on_hover_text("Points")
+                            .clicked()
+                        {
+                            debug.show_points = !debug.show_points;
+                        }
+                        if ui
+                            .add(egui::Button::new("S").selected(debug.key_shadows))
+                            .on_hover_text("Key shadows")
+                            .clicked()
+                        {
+                            debug.key_shadows = !debug.key_shadows;
+                        }
+                    });
+                });
+
+                if sheet_height > 0.0 {
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(sheet_rect), |ui| {
+                        ui.painter().rect_filled(
+                            sheet_rect,
+                            0.0,
+                            egui::Color32::from_rgb(38, 38, 38),
+                        );
+                        let frame = egui::Frame::NONE
+                            .fill(egui::Color32::from_rgb(38, 38, 38))
+                            .inner_margin(egui::Margin::symmetric(12, 10));
+                        frame.show(ui, |ui| {
+                            let style = ui.style_mut();
+                            style.visuals = egui::Visuals::dark();
+                            style.visuals.override_text_color =
+                                Some(egui::Color32::from_rgb(220, 220, 220));
+                            style.spacing.item_spacing = egui::vec2(10.0, 6.0);
+                            let selected = self.node_graph.selected_node_id();
+                            let mesh = selected.and_then(|id| self.eval_state.mesh_for_node(id));
+                            show_spreadsheet(ui, mesh, &mut self.spreadsheet_domain);
+                        });
+                    });
                 }
             });
 
@@ -477,11 +641,16 @@ impl eframe::App for GraphoApp {
                         egui::ScrollArea::vertical()
                             .max_height(max_height)
                             .show(ui, |ui| {
+                                let snapshot = self.snapshot_undo();
                                 if self
                                     .node_graph
                                     .show_inspector(ui, &mut self.project.graph)
                                 {
                                     self.mark_eval_dirty();
+                                    if !undo_pushed {
+                                        self.queue_undo_snapshot(snapshot, pointer_down);
+                                        undo_pushed = true;
+                                    }
                                 }
                             });
                     });
@@ -489,8 +658,16 @@ impl eframe::App for GraphoApp {
             }
 
             ui.scope_builder(egui::UiBuilder::new().max_rect(graph_rect), |ui| {
+                let snapshot = self.snapshot_undo();
+                let before_positions = snapshot.layout.positions.clone();
                 self.node_graph
                     .show(ui, &mut self.project.graph, &mut self.eval_dirty);
+                let after_positions = self.node_graph.layout_snapshot().positions;
+                let layout_moved = before_positions != after_positions;
+                if (self.node_graph.take_changed() || layout_moved) && !undo_pushed {
+                    self.queue_undo_snapshot(snapshot, pointer_down);
+                    undo_pushed = true;
+                }
             });
             self.last_node_graph_rect = Some(right_rect);
         });
