@@ -602,7 +602,7 @@ pub fn make_grid(size: [f32; 2], divisions: [u32; 2]) -> Mesh {
             let i2 = i0 + stride;
             let i3 = i2 + 1;
 
-            indices.extend_from_slice(&[i0, i1, i2, i1, i3, i2]);
+            indices.extend_from_slice(&[i0, i2, i1, i1, i2, i3]);
         }
     }
 

@@ -101,10 +101,14 @@ impl<'a> NodeGraphViewer<'a> {
             return;
         }
 
+        let was_empty = self.graph.nodes().next().is_none();
         let core_id = self.graph.add_node(node_definition(kind));
         let params = default_params(kind);
         for (key, value) in params.values {
             let _ = self.graph.set_param(core_id, key, value);
+        }
+        if was_empty {
+            let _ = self.graph.set_display_node(Some(core_id));
         }
 
         let snarl_id = snarl.insert_node(pos, SnarlNode { core_id });

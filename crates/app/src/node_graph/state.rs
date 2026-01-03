@@ -499,6 +499,7 @@ impl NodeGraphState {
             .iter()
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
+        let node_name = node.name.clone();
 
         if params.is_empty() {
             ui.label("No parameters.");
@@ -507,7 +508,7 @@ impl NodeGraphState {
 
         let mut changed = false;
         for (key, value) in params {
-            let (next_value, did_change) = edit_param(ui, &key, value);
+            let (next_value, did_change) = edit_param(ui, &node_name, &key, value);
             if did_change && graph.set_param(node_id, key, next_value).is_ok() {
                 changed = true;
             }

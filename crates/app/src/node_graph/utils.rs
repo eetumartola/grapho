@@ -28,10 +28,14 @@ pub(super) fn add_builtin_node(
     kind: BuiltinNodeKind,
     pos: Pos2,
 ) -> NodeId {
+    let was_empty = graph.nodes().next().is_none();
     let core_id = graph.add_node(node_definition(kind));
     let params = default_params(kind);
     for (key, value) in params.values {
         let _ = graph.set_param(core_id, key, value);
+    }
+    if was_empty {
+        let _ = graph.set_display_node(Some(core_id));
     }
     let snarl_id = snarl.insert_node(pos, SnarlNode { core_id });
     core_to_snarl.insert(core_id, snarl_id);

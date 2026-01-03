@@ -2,7 +2,12 @@ use egui::Ui;
 
 use grapho_core::ParamValue;
 
-pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamValue, bool) {
+pub(super) fn edit_param(
+    ui: &mut Ui,
+    node_name: &str,
+    label: &str,
+    value: ParamValue,
+) -> (ParamValue, bool) {
     match value {
         ParamValue::Float(mut v) => {
             let changed = param_row(ui, label, |ui| {
@@ -19,7 +24,7 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
                 {
                     changed = true;
                 }
-                let range = float_slider_range(label, v);
+                let range = float_slider_range(node_name, label, v);
                 ui.add_space(spacing);
                 let slider_width = ui.available_width().max(120.0);
                 if ui
@@ -91,7 +96,7 @@ pub(super) fn edit_param(ui: &mut Ui, label: &str, value: ParamValue) -> (ParamV
                     {
                         changed = true;
                     }
-                    let range = int_slider_range(label, v);
+                    let range = int_slider_range(node_name, label, v);
                     ui.add_space(spacing);
                     let slider_width = ui.available_width().max(120.0);
                     if ui
@@ -228,18 +233,32 @@ fn param_row_with_height(
     changed
 }
 
-fn float_slider_range(label: &str, _value: f32) -> std::ops::RangeInclusive<f32> {
+fn float_slider_range(
+    _node_name: &str,
+    label: &str,
+    _value: f32,
+) -> std::ops::RangeInclusive<f32> {
     match label {
         "threshold_deg" => 0.0..=180.0,
+        "amplitude" => -10.0..=10.0,
+        "frequency" => 0.0..=10.0,
+        "value_f" => -10.0..=10.0,
         _ => -1000.0..=1000.0,
     }
 }
 
-fn int_slider_range(label: &str, _value: i32) -> std::ops::RangeInclusive<i32> {
+fn int_slider_range(
+    node_name: &str,
+    label: &str,
+    _value: i32,
+) -> std::ops::RangeInclusive<i32> {
     match label {
         "domain" => 0..=3,
         "op" => 0..=3,
         "rows" | "cols" => 2..=64,
+        "seed" => 0..=100,
+        "count" if node_name == "Scatter" => 0..=1000,
+        "count" if node_name == "Copy/Transform" => 1..=100,
         _ => -1000..=1000,
     }
 }

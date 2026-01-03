@@ -138,9 +138,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 }
 
 fn shadow_factor(world_pos: vec3<f32>, normal: vec3<f32>) -> f32 {
-    if uniforms.shadow_params.x < 0.5 {
-        return 1.0;
-    }
+    let enabled = select(0.0, 1.0, uniforms.shadow_params.x >= 0.5);
     let n = normalize(normal);
     let light_dir = normalize(uniforms.key_dir);
     let ndotl = max(dot(n, light_dir), 0.0);
@@ -149,22 +147,24 @@ fn shadow_factor(world_pos: vec3<f32>, normal: vec3<f32>) -> f32 {
     let light_clip = uniforms.light_view_proj * vec4<f32>(offset_pos, 1.0);
     let ndc = light_clip.xyz / max(light_clip.w, 0.0001);
     let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || ndc.z < 0.0 || ndc.z > 1.0 {
-        return 1.0;
-    }
+    let in_bounds = uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0 && ndc.z >= 0.0 && ndc.z <= 1.0;
+    let in_bounds_f = select(0.0, 1.0, in_bounds);
+    let uv_clamped = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0));
     let depth = ndc.z - bias;
     let texel = max(uniforms.shadow_params.z, 0.000001);
     var shadow = 0.0;
-    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(-texel, -texel), depth);
-    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(0.0, -texel), depth);
-    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(texel, -texel), depth);
-    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(-texel, 0.0), depth);
-    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv, depth);
-    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(texel, 0.0), depth);
-    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(-texel, texel), depth);
-    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(0.0, texel), depth);
-    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv + vec2<f32>(texel, texel), depth);
-    return shadow / 9.0;
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv_clamped + vec2<f32>(-texel, -texel), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv_clamped + vec2<f32>(0.0, -texel), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv_clamped + vec2<f32>(texel, -texel), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv_clamped + vec2<f32>(-texel, 0.0), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv_clamped, depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv_clamped + vec2<f32>(texel, 0.0), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv_clamped + vec2<f32>(-texel, texel), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv_clamped + vec2<f32>(0.0, texel), depth);
+    shadow = shadow + textureSampleCompare(shadow_tex, shadow_sampler, uv_clamped + vec2<f32>(texel, texel), depth);
+    let visibility = shadow / 9.0;
+    let lit = 1.0 - in_bounds_f + visibility * in_bounds_f;
+    return 1.0 - enabled + enabled * lit;
 }
 
 fn shade_surface(normal: vec3<f32>, world_pos: vec3<f32>, color: vec3<f32>) -> vec3<f32> {

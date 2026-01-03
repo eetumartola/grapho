@@ -275,7 +275,7 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
             values.insert("scale".to_string(), ParamValue::Vec3([1.0, 1.0, 1.0]));
         }
         BuiltinNodeKind::Scatter => {
-            values.insert("count".to_string(), ParamValue::Int(200));
+            values.insert("count".to_string(), ParamValue::Int(100));
             values.insert("seed".to_string(), ParamValue::Int(1));
         }
         BuiltinNodeKind::Normal => {
@@ -286,7 +286,7 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
             values.insert("domain".to_string(), ParamValue::Int(0));
         }
         BuiltinNodeKind::Noise => {
-            values.insert("amplitude".to_string(), ParamValue::Float(0.2));
+            values.insert("amplitude".to_string(), ParamValue::Float(0.5));
             values.insert("frequency".to_string(), ParamValue::Float(1.0));
             values.insert("seed".to_string(), ParamValue::Int(1));
             values.insert("offset".to_string(), ParamValue::Vec3([0.0, 0.0, 0.0]));
@@ -296,7 +296,7 @@ pub fn default_params(kind: BuiltinNodeKind) -> NodeParams {
             values.insert("result".to_string(), ParamValue::String("Cd".to_string()));
             values.insert("domain".to_string(), ParamValue::Int(0));
             values.insert("op".to_string(), ParamValue::Int(0));
-            values.insert("value_f".to_string(), ParamValue::Float(0.0));
+            values.insert("value_f".to_string(), ParamValue::Float(1.0));
             values.insert("value_v3".to_string(), ParamValue::Vec3([1.0, 1.0, 1.0]));
         }
         BuiltinNodeKind::Wrangle => {

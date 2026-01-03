@@ -41,6 +41,25 @@ if (-not (Test-Path $distDir)) {
 Write-Host "Generating JS glue..." -ForegroundColor Cyan
 & wasm-bindgen $wasmOut --target web --out-dir $distDir --out-name grapho
 
+function Rename-ToLower {
+    param([string]$Path)
+    if (Test-Path $Path) {
+        $dir = Split-Path $Path -Parent
+        $name = Split-Path $Path -Leaf
+        $lower = $name.ToLowerInvariant()
+        if ($name -ne $lower) {
+            $temp = Join-Path $dir ("_tmp_" + $lower)
+            Move-Item -Path $Path -Destination $temp -Force
+            Move-Item -Path $temp -Destination (Join-Path $dir $lower) -Force
+        }
+    }
+}
+
+Rename-ToLower (Join-Path $distDir "Grapho.js")
+Rename-ToLower (Join-Path $distDir "Grapho.d.ts")
+Rename-ToLower (Join-Path $distDir "Grapho_bg.wasm")
+Rename-ToLower (Join-Path $distDir "Grapho_bg.wasm.d.ts")
+
 if (-not (Test-Path $indexSource)) {
     Write-Error "index.html not found at $indexSource"
 }
